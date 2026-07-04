@@ -4,7 +4,7 @@
 
 ## 当前焦点
 
-D1 实现完成，等待 workers.dev DNS 生效后做远程验证。准备进入 D2 (CLI Core)。
+D2 实现完成，本地验证 6 个命令全部通过。准备进入 D3 (Images)。
 
 ## 进度
 
@@ -12,7 +12,7 @@ D1 实现完成，等待 workers.dev DNS 生效后做远程验证。准备进入
 - [x] D1-D4: 设计文档编写（已补充设计说明 + 边界情况 + 数据模型）
 - [x] 项目结构确定（spec 驱动）
 - [x] D1: Worker Core — register/publish/list/remove + 页面展示
-- [ ] D2: CLI Core — login/publish/list/remove + 映射文件
+- [x] D2: CLI Core — login/publish/list/remove + 映射文件
 - [ ] D3: Images — R2 上传 + CLI 自动重写
 - [ ] D4: Namespace — @username/slug 永久 URL
 
@@ -33,12 +33,9 @@ D1 实现完成，等待 workers.dev DNS 生效后做远程验证。准备进入
 
 ## 下一步
 
-实现 D2 (CLI Core)：
-1. 创建 `cli/` 目录和 `package.json`
-2. 实现 config.js — 配置读写
-3. 实现 api.js — HTTP 请求封装
-4. 实现 login.js — 注册/登录
-5. 实现 files.js — 文件读取
-6. 实现 mapping.js — 映射文件管理
-7. 实现 cli.js — 主入口
-8. 验证：`node cli/src/cli.js publish test.md`
+实现 D3 (Images)：
+1. 读取 docs/D3-images.md
+2. Worker 端新增 /api/v1/upload 端点（R2 存储图片）
+3. CLI 端新增 images.js — 扫描 markdown 中的本地图片，上传后重写 URL
+4. publish 流程集成图片上传步骤
+5. 验证：发布含本地图片的 md，浏览器打开确认图片正常显示

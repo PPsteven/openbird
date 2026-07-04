@@ -1,0 +1,11 @@
+{
+  "name": "openbird",
+  "version": "0.1.0",
+  "description": "Publish Markdown from the command line",
+  "type": "module",
+  "bin": { "openbird": "./src/cli.js" },
+  "files": ["src"],
+  "keywords": ["markdown", "publish", "openbird", "cli"],
+  "license": "MIT",
+  "engines": { "node": ">=18" }
+}
