@@ -127,7 +127,7 @@ async function handlePublish(request, env) {
     await env.DOCS.put(kvKey, JSON.stringify(meta))
     await env.DOCS.put(`user:${auth.userId}:docs:@${auth.user.username}/${slugParam}`, "1")
 
-    const shareUrl = env.SHARE_URL || "https://share.jhao.space"
+    const shareUrl = env.SHARE_URL || "https://openbird.example.com"
     return json({
       slug: slugParam,
       username: auth.user.username,
@@ -183,7 +183,7 @@ async function handlePublish(request, env) {
   await env.DOCS.put("doc:" + slug, JSON.stringify(meta), { expirationTtl: 90 * 86400 })
   await env.DOCS.put("user:" + auth.userId + ":docs:" + slug, "1", { expirationTtl: 90 * 86400 })
 
-  const shareUrl = (env.SHARE_URL || "https://share.jhao.space") + "/" + slug
+  const shareUrl = (env.SHARE_URL || "https://openbird.example.com") + "/" + slug
 
   return json({
     slug,
@@ -210,7 +210,7 @@ async function handleList(request, env) {
       const docData = await env.DOCS.get("ns:" + suffix.slice(1))
       if (!docData) continue
       const doc = JSON.parse(docData)
-      const shareUrl = (env.SHARE_URL || "https://share.jhao.space") + "/@" + doc.username + "/" + doc.slug
+      const shareUrl = (env.SHARE_URL || "https://openbird.example.com") + "/@" + doc.username + "/" + doc.slug
       docs.push({
         slug: doc.slug,
         username: doc.username,
@@ -224,7 +224,7 @@ async function handleList(request, env) {
       const docData = await env.DOCS.get("doc:" + suffix)
       if (!docData) continue
       const doc = JSON.parse(docData)
-      const shareUrl = (env.SHARE_URL || "https://share.jhao.space") + "/" + suffix
+      const shareUrl = (env.SHARE_URL || "https://openbird.example.com") + "/" + suffix
       docs.push({
         slug: doc.slug,
         username: null,
@@ -337,7 +337,7 @@ async function handleUploadImage(request, env) {
   const key = `images/${auth.userId}/${randomHex(16)}${ext}`
   await env.IMAGES.put(key, buffer, { httpMetadata: { contentType } })
 
-  const shareUrl = env.SHARE_URL || "https://share.jhao.space"
+  const shareUrl = env.SHARE_URL || "https://openbird.example.com"
   return json({ url: `${shareUrl}/${key}` }, 201)
 }
 

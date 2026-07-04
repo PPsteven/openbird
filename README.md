@@ -97,7 +97,7 @@ export OPENBIRD_API_KEY="ob_your_api_key_here"
 ```bash
 echo "# Hello OpenBird" > hello.md
 openbird publish hello.md
-# → ✨ Published → https://share.jhao.space/quiet-blue-lake
+# → ✨ Published → https://openbird.example.com/quiet-blue-lake
 ```
 
 浏览器打开输出的 URL 即可看到渲染后的页面。
@@ -146,13 +146,13 @@ openbird publish notes.txt
 输出示例：
 
 ```
-✨ Published → https://share.jhao.space/my-custom-url
+✨ Published → https://openbird.example.com/my-custom-url
 ```
 
 更新已有文档：
 
 ```
-✓ Updated → https://share.jhao.space/my-custom-url
+✓ Updated → https://openbird.example.com/my-custom-url
 ```
 
 ### openbird list
@@ -167,9 +167,9 @@ openbird list
 
 ```
   my-custom-url  My Document Title
-    https://share.jhao.space/my-custom-url
+    https://openbird.example.com/my-custom-url
   @ppsteven/my-page  My Page
-    https://share.jhao.space/@ppsteven/my-page
+    https://openbird.example.com/@ppsteven/my-page
   2 documents
 ```
 
@@ -205,7 +205,7 @@ openbird remove @ppsteven/my-page
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `OPENBIRD_API_URL` | Worker API 地址 | `https://openbird.jhao.space` |
+| `OPENBIRD_API_URL` | Worker API 地址 | `https://openbird.example.com` |
 | `OPENBIRD_API_KEY` | API Key（优先级高于 credentials 文件） | 无 |
 
 ### 配置文件
@@ -278,7 +278,7 @@ Worker 内置零依赖 Markdown 渲染器，支持：
 注册新用户。
 
 ```bash
-curl -X POST https://openbird.jhao.space/api/v1/register \
+curl -X POST https://openbird.example.com/api/v1/register \
   -H "Content-Type: application/json" \
   -d '{"email":"user@example.com","password":"your-password"}'
 ```
@@ -296,7 +296,7 @@ curl -X POST https://openbird.jhao.space/api/v1/register \
 发布或更新文档。
 
 ```bash
-curl -X POST https://openbird.jhao.space/api/v1/publish \
+curl -X POST https://openbird.example.com/api/v1/publish \
   -H "Authorization: Bearer ob_xxx" \
   -H "Content-Type: application/json" \
   -d '{"markdown":"# Hello\n\nWorld","slug":"my-page"}'
@@ -314,7 +314,7 @@ curl -X POST https://openbird.jhao.space/api/v1/publish \
 {
   "slug": "my-page",
   "username": null,
-  "url": "https://share.jhao.space/my-page",
+  "url": "https://openbird.example.com/my-page",
   "title": "Hello",
   "expiresAt": "2026-10-02T10:00:00.000Z",
   "ttlDays": 90,
@@ -327,7 +327,7 @@ curl -X POST https://openbird.jhao.space/api/v1/publish \
 列出当前用户的所有文档。
 
 ```bash
-curl https://openbird.jhao.space/api/v1/documents \
+curl https://openbird.example.com/api/v1/documents \
   -H "Authorization: Bearer ob_xxx"
 ```
 
@@ -339,7 +339,7 @@ curl https://openbird.jhao.space/api/v1/documents \
       "slug": "my-page",
       "username": null,
       "title": "Hello",
-      "url": "https://share.jhao.space/my-page",
+      "url": "https://openbird.example.com/my-page",
       "source": "api",
       "updatedAt": "2026-07-04T10:00:00.000Z",
       "expiresAt": "2026-10-02T10:00:00.000Z"
@@ -356,11 +356,11 @@ curl https://openbird.jhao.space/api/v1/documents \
 
 ```bash
 # 删除普通文档
-curl -X DELETE "https://openbird.jhao.space/api/v1/documents?slug=my-page" \
+curl -X DELETE "https://openbird.example.com/api/v1/documents?slug=my-page" \
   -H "Authorization: Bearer ob_xxx"
 
 # 删除命名空间文档
-curl -X DELETE "https://openbird.jhao.space/api/v1/documents?slug=my-page&namespaced=true" \
+curl -X DELETE "https://openbird.example.com/api/v1/documents?slug=my-page&namespaced=true" \
   -H "Authorization: Bearer ob_xxx"
 ```
 
@@ -374,7 +374,7 @@ curl -X DELETE "https://openbird.jhao.space/api/v1/documents?slug=my-page&namesp
 上传图片。
 
 ```bash
-curl -X POST https://openbird.jhao.space/api/v1/upload-image \
+curl -X POST https://openbird.example.com/api/v1/upload-image \
   -H "Authorization: Bearer ob_xxx" \
   -F "file=@photo.png"
 ```
@@ -384,7 +384,7 @@ curl -X POST https://openbird.jhao.space/api/v1/upload-image \
 响应（200）：
 ```json
 {
-  "url": "https://share.jhao.space/images/user_abc123/a1b2c3d4.png"
+  "url": "https://openbird.example.com/images/user_abc123/a1b2c3d4.png"
 }
 ```
 
@@ -393,7 +393,7 @@ curl -X POST https://openbird.jhao.space/api/v1/upload-image \
 访问已发布的页面。
 
 ```bash
-curl https://share.jhao.space/my-page
+curl https://openbird.example.com/my-page
 # → HTML 文档
 ```
 
@@ -402,7 +402,7 @@ curl https://share.jhao.space/my-page
 访问命名空间页面。
 
 ```bash
-curl https://share.jhao.space/@ppsteven/my-page
+curl https://openbird.example.com/@ppsteven/my-page
 # → HTML 文档
 ```
 

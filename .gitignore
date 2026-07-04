@@ -6,3 +6,5 @@ wrangler.toml
 .openbird
 docs/history/
 .agents/
+AGENTS.md
+docs/
