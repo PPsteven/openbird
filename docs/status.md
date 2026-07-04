@@ -4,7 +4,7 @@
 
 ## 当前焦点
 
-D6: 文档完善 — README.md 使用文档。
+全部 6 个 Spec 实现完成。项目可交付。
 
 ## 进度
 
@@ -16,7 +16,7 @@ D6: 文档完善 — README.md 使用文档。
 - [x] D3: Images — R2 上传 + CLI 自动重写
 - [x] D4: Namespace — @username/slug 永久 URL
 - [x] D5: 远程部署验证 — wrangler deploy 成功，本地 12 端点全通过，远程受网络限制
-- [ ] D6: 文档完善 — README.md 使用文档
+- [x] D6: 文档完善 — README.md 使用文档
 
 ## 已知问题
 
@@ -38,7 +38,8 @@ D6: 文档完善 — README.md 使用文档。
 
 ## 下一步
 
-实现 D6 文档完善：
-1. 创建 README.md（快速开始 + 命令参考 + API 文档 + 架构说明）
-2. 验证 README 章节完整性
-3. 对照代码确认命令和端点准确性
+项目核心功能已全部完成。后续可考虑：
+- 在可访问 Cloudflare Workers 的网络环境中完成远程冒烟测试
+- 绑定自定义域名（openbird.jhao.space）
+- Worker 端 login 页面实现（配合 CLI callback server）
+- CI/CD 自动化部署
