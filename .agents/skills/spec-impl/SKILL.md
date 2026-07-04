@@ -26,6 +26,7 @@ Read these files in order:
 1. `AGENTS.md` — conventions, spec table, project rules
 2. `docs/architecture.md` — tech stack, constraints, decisions
 3. `docs/status.md` — current progress, what's next
+4. `docs/troubleshoot.md` — known pitfalls and solutions from prior specs
 
 Determine:
 - Which spec is current (the first unchecked item in status.md)
@@ -129,6 +130,20 @@ After verification passes:
    git branch -d D1-worker-core
    git merge D1-worker-core
    ```
+
+### Step 7: Log Lessons Learned
+
+Before closing the session, summarize any pitfalls, workarounds, or non-obvious findings from this spec's implementation into `docs/troubleshoot.md`:
+
+1. Review what went wrong or required extra effort during implementation
+2. For each item, write a clear section with:
+   - **Problem description** — what happened
+   - **Root cause** — why it happened
+   - **Solution / workaround** — how to fix or avoid it
+3. Append to `docs/troubleshoot.md` (create if not exists)
+4. Commit the update alongside the spec work
+
+This ensures future agent sessions (and human contributors) benefit from past experience without repeating the same mistakes.
 
 ## Development Norms
 
