@@ -16,6 +16,8 @@ export default {
     if (path === "/api/v1/documents" && method === "DELETE") return handleRemove(request, env)
     if (path === "/api/v1/upload-image" && method === "POST") return handleUploadImage(request, env)
     if (path === "/api/v1/account" && method === "PUT") return handleUpdateAccount(request, env)
+    if (path === "/api/v1/login" && method === "GET") return handleLoginPage(request, env)
+    if (path === "/api/v1/login" && method === "POST") return handleLoginSubmit(request, env)
 
     if (path.startsWith("/images/")) return serveImage(path, env)
     if (path.startsWith("/@")) return serveNamespacedPage(path, env)
@@ -415,6 +417,110 @@ async function handleRemove(request, env) {
   await env.DOCS.delete("user:" + auth.userId + ":docs:" + slug)
 
   return json({ ok: true })
+}
+
+async function handleLoginPage(request, env) {
+  const url = new URL(request.url)
+  const callback = url.searchParams.get("callback") || ""
+
+  const html = `<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login — OpenBird</title>
+<style>
+body{max-width:400px;margin:4rem auto;padding:0 1.5rem;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.6;color:#1a1a1a}
+h1{font-size:1.5rem;margin-bottom:.5rem}
+p{color:#555;margin-bottom:1.5rem}
+label{display:block;margin-bottom:.25rem;font-weight:600;font-size:.875rem}
+input{width:100%;padding:.5rem .75rem;border:1px solid #ddd;border-radius:6px;font-size:1rem;box-sizing:border-box;margin-bottom:1rem}
+input:focus{outline:none;border-color:#0366d6;box-shadow:0 0 0 3px rgba(3,102,214,.15)}
+button{width:100%;padding:.6rem;background:#0366d6;color:#fff;border:none;border-radius:6px;font-size:1rem;cursor:pointer}
+button:hover{background:#0256b9}
+.error{color:#d73a49;font-size:.875rem;margin-top:.5rem;display:none}
+.hint{font-size:.8rem;color:#888;margin-top:.75rem;text-align:center}
+</style>
+</head>
+<body>
+<h1>Login to OpenBird</h1>
+<p>Enter your credentials to get an API key.</p>
+<form id="loginForm">
+<label for="email">Email / Username</label>
+<input type="text" id="email" name="email" placeholder="admin@example.com" autocomplete="username" required>
+<label for="password">Password</label>
+<input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
+<button type="submit">Get API Key</button>
+<div class="error" id="error"></div>
+</form>
+<div class="hint">Don't have an account? Use <code>curl</code> to register first.</div>
+<script>
+const callback = ${JSON.stringify(callback)}
+document.getElementById("loginForm").addEventListener("submit", async e => {
+  e.preventDefault()
+  const email = document.getElementById("email").value
+  const password = document.getElementById("password").value
+  const errorEl = document.getElementById("error")
+  try {
+    const resp = await fetch("/api/v1/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    })
+    const data = await resp.json()
+    if (!resp.ok) { errorEl.textContent = data.error; errorEl.style.display = "block"; return }
+    if (callback) {
+      window.location.href = callback + "?token=" + encodeURIComponent(data.apiKey)
+    } else {
+      document.body.innerHTML = "<h1>API Key</h1><p style='word-break:break-all;font-family:monospace;background:#f4f4f4;padding:1rem;border-radius:6px'>" + data.apiKey + "</p><p>Save this key and use it with <code>openbird login</code>.</p>"
+    }
+  } catch (e) {
+    errorEl.textContent = "Network error"; errorEl.style.display = "block"
+  }
+})
+</script>
+</body>
+</html>`
+  return new Response(html, {
+    headers: { "Content-Type": "text/html", "Cache-Control": "no-store" }
+  })
+}
+
+async function handleLoginSubmit(request, env) {
+  let body
+  try { body = await request.json() } catch {
+    return json({ error: "Invalid request body" }, 400)
+  }
+
+  const { email, password } = body
+  if (!email || !password) {
+    return json({ error: "Email and password are required" }, 400)
+  }
+
+  const existing = await env.USERS.get("email:" + email)
+  if (!existing) {
+    return json({ error: "User not found" }, 404)
+  }
+
+  const userData = await env.USERS.get("user:" + existing)
+  if (!userData) {
+    return json({ error: "User not found" }, 404)
+  }
+
+  const user = JSON.parse(userData)
+  const passwordHash = await sha256(password)
+  if (user.passwordHash !== passwordHash) {
+    return json({ error: "Invalid password" }, 401)
+  }
+
+  const apiKey = "ob_" + randomHex(32)
+  const keyHash = await sha256(apiKey)
+  const now = new Date().toISOString()
+  user.keys.push({ prefix: apiKey.slice(0, 7), hash: keyHash, createdAt: now })
+  await env.USERS.put("user:" + user.id, JSON.stringify(user))
+  await env.USERS.put("apikey:" + keyHash, JSON.stringify({ userId: user.id, createdAt: now }))
+
+  return json({ userId: user.id, apiKey })
 }
 
 async function servePage(slug, env) {
