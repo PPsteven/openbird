@@ -151,9 +151,13 @@ After verification passes:
    git merge D1-worker-core
    ```
 
-### Step 7: Log Lessons Learned
+### Step 7: Log Lessons Learned & Export Session
 
-Before closing the session, summarize any pitfalls, workarounds, or non-obvious findings from this spec's implementation into `docs/troubleshoot.md`:
+Before closing the session:
+
+#### 7a. Log pitfalls to troubleshoot.md
+
+Summarize any pitfalls, workarounds, or non-obvious findings from this spec's implementation into `docs/troubleshoot.md`:
 
 1. Review what went wrong or required extra effort during implementation
 2. For each item, write a clear section with:
@@ -161,7 +165,23 @@ Before closing the session, summarize any pitfalls, workarounds, or non-obvious 
    - **Root cause** — why it happened
    - **Solution / workaround** — how to fix or avoid it
 3. Append to `docs/troubleshoot.md` (create if not exists)
-4. Commit the update alongside the spec work
+
+#### 7b. Export session transcript
+
+Export the full conversation transcript for future reference:
+
+```bash
+./scripts/export-session.sh D{N}-{spec-short-name}
+```
+
+This runs `opencode export <session-id> --sanitize` to save the raw JSON transcript to `docs/history/D{N}-{spec-short-name}.json`.
+
+#### 7c. Commit everything
+
+```bash
+git add docs/troubleshoot.md docs/history/
+git commit -m "docs: add troubleshooting and session export for D{N}"
+```
 
 This ensures future agent sessions (and human contributors) benefit from past experience without repeating the same mistakes.
 
