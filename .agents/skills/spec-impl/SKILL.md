@@ -171,10 +171,12 @@ Summarize any pitfalls, workarounds, or non-obvious findings from this spec's im
 Export the full conversation transcript for future reference:
 
 ```bash
-bash .agents/skills/spec-impl/scripts/export-session.sh D{N}-{spec-short-name}
+# Get the latest session ID and export it
+SESSION_ID=$(opencode session list --format json | python3 -c "import json,sys; s=json.load(sys.stdin); print(s[0]['id'] if s else '')")
+opencode export "$SESSION_ID" --sanitize > "docs/history/D{N}-{spec-short-name}.json"
 ```
 
-This runs `opencode export <session-id> --sanitize` to save the raw JSON transcript to `docs/history/D{N}-{spec-short-name}.json`.
+This saves the raw JSON transcript to `docs/history/D{N}-{spec-short-name}.json`.
 
 #### 7c. Commit everything
 
