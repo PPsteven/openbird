@@ -4,7 +4,7 @@
 
 ## 当前焦点
 
-D3 实现完成，本地验证图片上传+渲染+访问全部通过。准备进入 D4 (Namespace)。
+全部 4 个 Spec 实现完成。所有功能本地验证通过。
 
 ## 进度
 
@@ -14,7 +14,7 @@ D3 实现完成，本地验证图片上传+渲染+访问全部通过。准备进
 - [x] D1: Worker Core — register/publish/list/remove + 页面展示
 - [x] D2: CLI Core — login/publish/list/remove + 映射文件
 - [x] D3: Images — R2 上传 + CLI 自动重写
-- [ ] D4: Namespace — @username/slug 永久 URL
+- [x] D4: Namespace — @username/slug 永久 URL
 
 ## 已知问题
 
@@ -34,8 +34,8 @@ D3 实现完成，本地验证图片上传+渲染+访问全部通过。准备进
 
 ## 下一步
 
-实现 D4 (Namespace)：
-1. 读取 docs/D4-namespace.md
-2. Worker 端新增 @username/slug 命名空间路由
-3. CLI 端新增 --namespace 参数
-4. 验证：CLI --namespace 发布后通过 @username/slug 访问
+所有 Spec 已完成。后续可考虑：
+- 远程部署验证（wrangler deploy + 域名绑定）
+- Worker 端 login 页面实现（配合 CLI callback server）
+- 补充 account 管理 API（修改 username 等）
+- 文档完善（README、使用说明）

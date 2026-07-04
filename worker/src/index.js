@@ -9,8 +9,10 @@ export default {
     if (path === "/api/v1/documents" && method === "GET") return handleList(request, env)
     if (path === "/api/v1/documents" && method === "DELETE") return handleRemove(request, env)
     if (path === "/api/v1/upload-image" && method === "POST") return handleUploadImage(request, env)
+    if (path === "/api/v1/account" && method === "PUT") return handleUpdateAccount(request, env)
 
     if (path.startsWith("/images/")) return serveImage(path, env)
+    if (path.startsWith("/@")) return serveNamespacedPage(path, env)
     if (path.startsWith("/") && path.length > 1) return servePage(path.slice(1), env)
 
     return new Response("Not Found", { status: 404 })
@@ -80,7 +82,7 @@ async function handlePublish(request, env) {
     return json({ error: "Invalid request body" }, 400)
   }
 
-  const { markdown, title: titleParam, slug: slugParam } = body
+  const { markdown, title: titleParam, slug: slugParam, namespaced } = body
 
   if (!markdown || typeof markdown !== "string" || markdown.trim().length === 0) {
     return json({ error: "Missing markdown field" }, 400)
@@ -89,6 +91,52 @@ async function handlePublish(request, env) {
   const markdownBytes = new TextEncoder().encode(markdown).length
   if (markdownBytes > 262144) {
     return json({ error: "Markdown too large (max 262144 bytes)" }, 413)
+  }
+
+  if (namespaced) {
+    if (!slugParam) {
+      return json({ error: "--namespace requires a slug" }, 400)
+    }
+    if (!auth.user.username) {
+      return json({ error: "Username required for namespaced publishing" }, 403)
+    }
+    if (!/^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/.test(slugParam)) {
+      return json({ error: "Invalid slug format" }, 400)
+    }
+
+    const kvKey = `ns:${auth.user.username}/${slugParam}`
+    const existing = await env.DOCS.get(kvKey)
+    const isNew = !existing
+
+    const title = titleParam || extractTitle(markdown) || "Untitled"
+    const html = renderMarkdown(markdown)
+
+    const htmlBytes = new TextEncoder().encode(html).length
+    if (htmlBytes > 524288) {
+      return json({ error: "Rendered HTML too large (max 524288 bytes)" }, 413)
+    }
+
+    const now = new Date().toISOString()
+    const r2Key = `pages/@${auth.user.username}/${slugParam}/index.html`
+    await env.PAGES.put(r2Key, html, {
+      httpMetadata: { contentType: "text/html" },
+      customMetadata: { userId: auth.userId, title, slug: slugParam, username: auth.user.username, createdAt: now, updatedAt: now }
+    })
+
+    const meta = { slug: slugParam, title, userId: auth.userId, username: auth.user.username, source: "api", createdAt: now, updatedAt: now }
+    await env.DOCS.put(kvKey, JSON.stringify(meta))
+    await env.DOCS.put(`user:${auth.userId}:docs:@${auth.user.username}/${slugParam}`, "1")
+
+    const shareUrl = env.SHARE_URL || "https://share.jhao.space"
+    return json({
+      slug: slugParam,
+      username: auth.user.username,
+      url: `${shareUrl}/@${auth.user.username}/${slugParam}`,
+      title,
+      expiresAt: null,
+      ttlDays: null,
+      created: isNew
+    }, isNew ? 201 : 200)
   }
 
   let slug
@@ -159,20 +207,36 @@ async function handleList(request, env) {
 
   const docs = []
   for (const key of result.keys) {
-    const slug = key.name.slice(prefix.length)
-    const docData = await env.DOCS.get("doc:" + slug)
-    if (!docData) continue
-    const doc = JSON.parse(docData)
-    const shareUrl = (env.SHARE_URL || "https://share.jhao.space") + "/" + slug
-    docs.push({
-      slug: doc.slug,
-      username: null,
-      title: doc.title,
-      url: shareUrl,
-      source: doc.source,
-      updatedAt: doc.updatedAt,
-      expiresAt: doc.expiresAt
-    })
+    const suffix = key.name.slice(prefix.length)
+    if (suffix.startsWith("@")) {
+      const docData = await env.DOCS.get("ns:" + suffix.slice(1))
+      if (!docData) continue
+      const doc = JSON.parse(docData)
+      const shareUrl = (env.SHARE_URL || "https://share.jhao.space") + "/@" + doc.username + "/" + doc.slug
+      docs.push({
+        slug: doc.slug,
+        username: doc.username,
+        title: doc.title,
+        url: shareUrl,
+        source: doc.source,
+        updatedAt: doc.updatedAt,
+        expiresAt: null
+      })
+    } else {
+      const docData = await env.DOCS.get("doc:" + suffix)
+      if (!docData) continue
+      const doc = JSON.parse(docData)
+      const shareUrl = (env.SHARE_URL || "https://share.jhao.space") + "/" + suffix
+      docs.push({
+        slug: doc.slug,
+        username: null,
+        title: doc.title,
+        url: shareUrl,
+        source: doc.source,
+        updatedAt: doc.updatedAt,
+        expiresAt: doc.expiresAt
+      })
+    }
   }
 
   docs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
@@ -186,8 +250,29 @@ async function handleRemove(request, env) {
 
   const url = new URL(request.url)
   const slug = url.searchParams.get("slug")
+  const namespaced = url.searchParams.get("namespaced") === "true"
+
   if (!slug) {
     return json({ error: "Missing slug parameter" }, 400)
+  }
+
+  if (namespaced) {
+    if (!auth.user.username) {
+      return json({ error: "Username required for namespaced operations" }, 403)
+    }
+    const kvKey = `ns:${auth.user.username}/${slug}`
+    const docData = await env.DOCS.get(kvKey)
+    if (!docData) {
+      return json({ error: "Document not found" }, 404)
+    }
+    const doc = JSON.parse(docData)
+    if (doc.userId !== auth.userId) {
+      return json({ error: "Document not owned by user" }, 403)
+    }
+    await env.PAGES.delete(`pages/@${auth.user.username}/${slug}/index.html`)
+    await env.DOCS.delete(kvKey)
+    await env.DOCS.delete(`user:${auth.userId}:docs:@${auth.user.username}/${slug}`)
+    return json({ ok: true })
   }
 
   const docData = await env.DOCS.get("doc:" + slug)
@@ -271,6 +356,37 @@ async function serveImage(path, env) {
       "Cache-Control": "public, max-age=31536000, immutable"
     }
   })
+}
+
+async function serveNamespacedPage(path, env) {
+  const match = path.match(/^\/@([^/]+)\/(.+)$/)
+  if (!match) return new Response("Not Found", { status: 404 })
+  const [, username, slug] = match
+  const obj = await env.PAGES.get(`pages/@${username}/${slug}/index.html`)
+  if (!obj) return new Response("Not Found", { status: 404 })
+  return new Response(obj.body, {
+    headers: { "Content-Type": "text/html", "Cache-Control": "public, max-age=3600" }
+  })
+}
+
+async function handleUpdateAccount(request, env) {
+  const auth = await verifyAuth(request, env)
+  if (!auth) return json({ error: "Invalid API key" }, 401)
+
+  let body
+  try { body = await request.json() } catch { return json({ error: "Invalid request body" }, 400) }
+
+  const { username } = body
+  if (!username || typeof username !== "string") {
+    return json({ error: "Username is required" }, 400)
+  }
+  if (!/^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/.test(username)) {
+    return json({ error: "Invalid username format" }, 400)
+  }
+
+  auth.user.username = username
+  await env.USERS.put("user:" + auth.userId, JSON.stringify(auth.user))
+  return json({ username })
 }
 
 function extractTitle(markdown) {

@@ -98,6 +98,25 @@ function askQuestion(question) {
   })
 }
 
+function parsePublishArgs(fileArgs) {
+  let slug = null, namespaced = false
+  const files = []
+  for (let i = 0; i < fileArgs.length; i++) {
+    if (fileArgs[i] === "--slug" && i + 1 < fileArgs.length) { slug = fileArgs[++i] }
+    else if (fileArgs[i] === "--namespace" && i + 1 < fileArgs.length) { slug = fileArgs[++i]; namespaced = true }
+    else files.push(fileArgs[i])
+  }
+  return { slug, namespaced, files }
+}
+
+function parseSlugValue(value) {
+  if (value.startsWith("@") && value.includes("/")) {
+    const slash = value.indexOf("/")
+    return { slug: value.slice(slash + 1), namespaced: true }
+  }
+  return { slug: value, namespaced: false }
+}
+
 async function cmdPublish(publishArgs) {
   const apiKey = getApiKey()
   if (!apiKey) {
@@ -105,16 +124,7 @@ async function cmdPublish(publishArgs) {
     process.exit(1)
   }
 
-  let explicitSlug = null
-  const positional = []
-  for (let i = 0; i < publishArgs.length; i++) {
-    if (publishArgs[i] === "--slug" && i + 1 < publishArgs.length) {
-      explicitSlug = publishArgs[i + 1]
-      i++
-    } else {
-      positional.push(publishArgs[i])
-    }
-  }
+  const { slug: explicitSlug, namespaced, files: positional } = parsePublishArgs(publishArgs)
 
   let filename = null
   let markdown
@@ -142,21 +152,30 @@ async function cmdPublish(publishArgs) {
   }
 
   let slug = explicitSlug
+  let isNamespaced = namespaced
   if (!slug && filename) {
     const mappings = readMappings()
-    slug = mappings.get(filename) || mappings.get(basename(filename)) || null
+    const raw = mappings.get(filename) || mappings.get(basename(filename)) || null
+    if (raw) {
+      const parsed = parseSlugValue(raw)
+      slug = parsed.slug
+      isNamespaced = parsed.namespaced
+    }
   }
 
   try {
-    const result = await publish({ markdown, slug })
-    if (filename) setMapping(filename, result.slug)
+    const result = await publish({ markdown, slug, namespaced: isNamespaced })
+    if (filename) {
+      const mappingValue = result.username ? `@${result.username}/${result.slug}` : result.slug
+      setMapping(filename, mappingValue)
+    }
     if (result.created) {
       console.log(`✨ Published → ${result.url}`)
     } else {
       console.log(`✓ Updated → ${result.url}`)
     }
   } catch (e) {
-    if (slug && !explicitSlug && e.message === "Document not found") {
+    if (slug && !explicitSlug && !namespaced && e.message === "Document not found") {
       const mappings = readMappings()
       mappings.delete(filename)
       mappings.delete(basename(filename))
@@ -227,16 +246,41 @@ async function cmdRemove(removeArgs) {
     process.exit(1)
   }
 
-  const target = removeArgs[0]
+  let forceNamespaced = false
+  const positional = []
+  for (const arg of removeArgs) {
+    if (arg === "--namespace") forceNamespaced = true
+    else positional.push(arg)
+  }
+
+  const target = positional[0]
   const mappings = readMappings()
   let slug = mappings.get(target) || target
+  let namespaced = forceNamespaced
 
   for (const [file, s] of mappings) {
     if (s === target) { slug = s; break }
   }
 
+  if (target.startsWith("@")) {
+    const slash = target.indexOf("/")
+    if (slash !== -1) {
+      slug = target.slice(slash + 1)
+      namespaced = true
+    }
+  }
+
+  if (!namespaced) {
+    const raw = mappings.get(target)
+    if (raw) {
+      const parsed = parseSlugValue(raw)
+      slug = parsed.slug
+      namespaced = parsed.namespaced
+    }
+  }
+
   try {
-    await removeDocument(slug)
+    await removeDocument(slug, { namespaced })
     removeMapping(target)
     console.log(`✓ Removed ${slug}`)
   } catch (e) {
@@ -252,8 +296,10 @@ Usage:
   openbird login                          Authenticate with OpenBird
   openbird publish <file.md>              Publish or update a document
   openbird publish --slug <slug> <file>   Update a specific document
+  openbird publish --namespace <slug>     Publish to @username/slug namespace
   openbird publish                        Read from stdin
   openbird remove <file.md|slug>          Delete a document
+  openbird remove --namespace <slug>      Delete a namespaced document
   openbird list                           List published documents
   openbird help                           Show this help
 
