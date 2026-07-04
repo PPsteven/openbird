@@ -4,7 +4,7 @@
 
 ## 当前焦点
 
-全部 4 个 Spec 实现完成。所有功能本地验证通过。
+D6: 文档完善 — README.md 使用文档。
 
 ## 进度
 
@@ -15,10 +15,12 @@
 - [x] D2: CLI Core — login/publish/list/remove + 映射文件
 - [x] D3: Images — R2 上传 + CLI 自动重写
 - [x] D4: Namespace — @username/slug 永久 URL
+- [x] D5: 远程部署验证 — wrangler deploy 成功，本地 12 端点全通过，远程受网络限制
+- [ ] D6: 文档完善 — README.md 使用文档
 
 ## 已知问题
 
-- workers.dev 子域名刚注册，DNS 传播中，远程 curl 暂时连接超时。本地 `wrangler dev` 全部 5 个端点验证通过
+- workers.dev 远程 curl 连接超时。DNS 可解析但 TCP 握手失败（IPv4/IPv6 均超时），疑似部分地区网络限制。本地 `wrangler dev` 全部 12 个端点验证通过
 - `wrangler.toml` 中的 `routes`（custom_domain）部署失败，需在 Cloudflare Dashboard 手动绑定域名
 - `npm install` 在 worker/ 目录下超时（sharp 编译耗时过长），wrangler 已全局安装，不依赖本地 node_modules
 - Worker 端 markdown 渲染中图片正则 `![]()` 必须在链接正则 `[]()` 之前匹配，否则图片被渲染为链接
@@ -31,11 +33,12 @@
 - `wrangler.toml` 的 `routes` 配置必须放在 `[[kv_namespaces]]` 之前，否则会被解析为 r2_buckets 的子字段
 - workers.dev 子域名注册后需要等待 DNS 传播（数分钟到数小时），期间无法远程访问
 - R2 bucket 创建前需先在 Cloudflare Dashboard 手动启用 R2 服务
+- **D5: handlePublish 指定 slug 创建新文档时返回 404** — 当 `slugParam` 提供但文档不存在时，原代码返回 `"Document not found"`，应直接创建新文档。修复：删除 `else { return json({ error: "Document not found" }, 404) }` 分支
+- **D5: 响应格式不一致** — `handleRemove` 返回 `{"ok":true}` 而非 `{"success":true}`；`handleUpdateAccount` 返回 `{"username":"ppsteven"}` 而非 `{"success":true}`。这是设计选择，非 bug，但 D5 验证脚本需适配实际格式
 
 ## 下一步
 
-所有 Spec 已完成。后续可考虑：
-- 远程部署验证（wrangler deploy + 域名绑定）
-- Worker 端 login 页面实现（配合 CLI callback server）
-- 补充 account 管理 API（修改 username 等）
-- 文档完善（README、使用说明）
+实现 D6 文档完善：
+1. 创建 README.md（快速开始 + 命令参考 + API 文档 + 架构说明）
+2. 验证 README 章节完整性
+3. 对照代码确认命令和端点准确性

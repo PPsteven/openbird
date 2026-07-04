@@ -83,6 +83,8 @@ flowchart TD
 | 2 | [docs/D2-cli-core.md](docs/D2-cli-core.md) | `cli/` 可运行 | `node cli/src/cli.js publish test.md` |
 | 3 | [docs/D3-images.md](docs/D3-images.md) | 图片上传功能 | 发布含图片的 md |
 | 4 | [docs/D4-namespace.md](docs/D4-namespace.md) | @username/slug | CLI --namespace 验证 |
+| 5 | [docs/D5-deployment.md](docs/D5-deployment.md) | 远程部署验证 | wrangler deploy + curl 冒烟测试 |
+| 6 | [docs/D6-documentation.md](docs/D6-documentation.md) | README.md | 新用户按文档从零完成发布 |
 
 ## 约定
 

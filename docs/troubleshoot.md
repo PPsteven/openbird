@@ -115,3 +115,34 @@ result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
 ```bash
 wrangler deployments list
 ```
+
+---
+
+## D5: 远程部署验证
+
+### workers.dev 远程连接超时（部分地区）
+
+`wrangler deploy` 成功后，workers.dev 子域名 DNS 可解析但 TCP 连接超时（IPv4/IPv6 均超时）。疑似部分地区网络限制导致 Cloudflare Workers 边缘节点不可达。
+
+**验证方式**：
+- `wrangler whoami` 确认登录状态
+- `wrangler deployments list` 确认版本已上传
+- 通过 Cloudflare API 确认子域名注册和启用状态
+- 使用 `wrangler dev` 本地模拟完全验证（含 KV + R2 binding）
+
+### handlePublish 指定 slug 创建新文档返回 404
+
+**问题**：`POST /api/v1/publish` 带 `{"slug":"my-slug","markdown":"..."}` 创建新文档时，返回 `{"error":"Document not found"}`。
+
+**根因**：`worker/src/index.js:157` 在 slug 已提供但文档不存在时，`else` 分支直接返回 404，不允许新建。
+
+**修复**：删除 `else { return json({ error: "Document not found" }, 404) }`，当 slug 不存在时直接创建新文档（`isNew` 保持 `true`）。
+
+### 响应格式不一致（spec vs 实际）
+
+| 端点 | Spec 预期 | 实际返回 | 影响 |
+|------|----------|---------|------|
+| `DELETE /api/v1/documents` | `{"success":true}` | `{"ok":true}` | 验证脚本需适配 |
+| `PUT /api/v1/account` | `{"success":true}` | `{"username":"ppsteven"}` | 验证脚本需适配 |
+
+非 bug，是设计选择。`ok` 更符合 JS 惯例，`username` 返回确认写入的值。

@@ -153,8 +153,6 @@ async function handlePublish(request, env) {
         return json({ error: "Document not owned by user" }, 403)
       }
       isNew = false
-    } else {
-      return json({ error: "Document not found" }, 404)
     }
     slug = slugParam
   } else {
