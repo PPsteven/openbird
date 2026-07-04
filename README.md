@@ -7,6 +7,7 @@
 ## 特性
 
 - 一行命令发布 Markdown 为美观网页
+- 零配置临时发布（`--temp`，无需登录，1h 自动过期）
 - 本地图片自动上传
 - `@username/slug` 永久 URL
 - 个人/小团队使用完全免费（Cloudflare Free Tier）
@@ -113,6 +114,13 @@ openbird login
 export OPENBIRD_API_KEY="ob_your_api_key_here"
 ```
 
+> **零配置临时发布**：不想登录？直接用 `--temp` 发布 1 小时临时页面：
+> ```bash
+> echo "# Quick Test" > /tmp/test.md
+> openbird publish --temp /tmp/test.md
+> # → ⚡ Published (temp, 1h) → https://openbird.example.com/warm-clear-seed
+> ```
+
 ### 5. 发布第一篇文档
 
 ```bash
@@ -152,6 +160,9 @@ openbird publish --slug my-custom-url my-doc.md
 # 发布到命名空间（永久 URL，需先设置 username）
 openbird publish --namespace my-page my-doc.md
 
+# 临时发布（无需登录，1 小时自动过期）
+openbird publish --temp my-doc.md
+
 # 从 stdin 发布
 cat my-doc.md | openbird publish
 
@@ -163,6 +174,7 @@ openbird publish notes.txt
 |------|------|
 | `--slug <value>` | 自定义 URL slug（如 `my-page`，3-60 字符，小写字母数字和连字符） |
 | `--namespace <value>` | 发布到 `@username/<value>` 永久 URL（不自动过期） |
+| `--temp` | 临时发布，无需登录，1 小时后自动过期 |
 
 输出示例：
 
@@ -292,11 +304,11 @@ Worker 内置零依赖 Markdown 渲染器，支持：
 
 ## API 文档
 
-所有 API 需要 `Authorization: Bearer ob_xxx` 请求头（register 除外）。
+所有 API 需要 `Authorization: Bearer ob_xxx` 请求头（register 和 guest publish 除外）。
 
 ### POST /api/v1/register
 
-注册新用户。
+注册新用户。若 email 匹配部署时设置的 `ADMIN_EMAIL`，则自动通过并返回 API Key。
 
 ```bash
 curl -X POST https://openbird.example.com/api/v1/register \
@@ -340,6 +352,35 @@ curl -X POST https://openbird.example.com/api/v1/publish \
   "expiresAt": "2026-10-02T10:00:00.000Z",
   "ttlDays": 90,
   "created": true
+}
+```
+
+### POST /api/v1/publish（临时发布）
+
+无需认证，发布 1 小时临时页面。需显式传 `temp: true`。
+
+```bash
+curl -X POST https://openbird.example.com/api/v1/publish \
+  -H "Content-Type: application/json" \
+  -d '{"markdown":"# Hello Guest","temp":true}'
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `markdown` | string | 是 | Markdown 内容（最大 256KB） |
+| `temp` | boolean | 是 | 必须为 `true`，否则返回 401 |
+| `slug` | string | 否 | 自定义 slug，不提供则自动生成 |
+| `title` | string | 否 | 页面标题 |
+
+响应（201）：
+```json
+{
+  "slug": "warm-clear-seed",
+  "url": "https://openbird.example.com/warm-clear-seed",
+  "title": "Hello Guest",
+  "expiresAt": "2026-07-04T11:00:00.000Z",
+  "ttlMinutes": 60,
+  "guest": true
 }
 ```
 
