@@ -8,6 +8,7 @@ import { publish, listDocuments, removeDocument } from "./api.js"
 import { readMappings, setMapping, removeMapping, writeMappings } from "./mapping.js"
 import { startCallbackServer, openBrowser } from "./login.js"
 import { isAllowedFile, ALLOWED_EXTENSIONS } from "./files.js"
+import { uploadAndRewriteImages } from "./images.js"
 
 const args = process.argv.slice(2)
 const command = args[0]
@@ -137,6 +138,7 @@ async function cmdPublish(publishArgs) {
     }
     markdown = readFileSync(filePath, "utf-8")
     filename = filePath
+    markdown = await uploadAndRewriteImages(markdown, filename)
   }
 
   let slug = explicitSlug

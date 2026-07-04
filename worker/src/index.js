@@ -8,7 +8,9 @@ export default {
     if (path === "/api/v1/publish" && method === "POST") return handlePublish(request, env)
     if (path === "/api/v1/documents" && method === "GET") return handleList(request, env)
     if (path === "/api/v1/documents" && method === "DELETE") return handleRemove(request, env)
+    if (path === "/api/v1/upload-image" && method === "POST") return handleUploadImage(request, env)
 
+    if (path.startsWith("/images/")) return serveImage(path, env)
     if (path.startsWith("/") && path.length > 1) return servePage(path.slice(1), env)
 
     return new Response("Not Found", { status: 404 })
@@ -219,6 +221,58 @@ async function servePage(slug, env) {
   })
 }
 
+async function handleUploadImage(request, env) {
+  const auth = await verifyAuth(request, env)
+  if (!auth) return json({ error: "Invalid API key" }, 401)
+
+  let form, file
+  try {
+    form = await request.formData()
+    file = form.get("file")
+  } catch {
+    return json({ error: "Invalid form data" }, 400)
+  }
+
+  if (!file || typeof file === "string") {
+    return json({ error: "Missing file field" }, 400)
+  }
+
+  const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"])
+  const EXT_MAP = { "image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp", "image/svg+xml": ".svg" }
+
+  const contentType = file.type
+  if (!ALLOWED_TYPES.has(contentType)) {
+    return json({ error: `Unsupported image type: ${contentType}` }, 400)
+  }
+
+  const buffer = await file.arrayBuffer()
+  if (buffer.byteLength > 10 * 1024 * 1024) {
+    return json({ error: "Image too large (max 10 MB)" }, 413)
+  }
+
+  const ext = EXT_MAP[contentType]
+  const key = `images/${auth.userId}/${randomHex(16)}${ext}`
+  await env.IMAGES.put(key, buffer, { httpMetadata: { contentType } })
+
+  const shareUrl = env.SHARE_URL || "https://share.jhao.space"
+  return json({ url: `${shareUrl}/${key}` }, 201)
+}
+
+async function serveImage(path, env) {
+  const key = path.slice(1)
+  const obj = await env.IMAGES.get(key)
+  if (!obj) {
+    return new Response("Not Found", { status: 404 })
+  }
+
+  return new Response(obj.body, {
+    headers: {
+      "Content-Type": obj.httpMetadata?.contentType || "application/octet-stream",
+      "Cache-Control": "public, max-age=31536000, immutable"
+    }
+  })
+}
+
 function extractTitle(markdown) {
   const match = markdown.match(/^#\s+(.+)/m)
   return match ? match[1].trim() : null
@@ -298,8 +352,8 @@ function renderMarkdown(markdown) {
   result = result.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
   result = result.replace(/\*(.+?)\*/g, "<em>$1</em>")
   result = result.replace(/`([^`]+)`/g, "<code>$1</code>")
-  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
   result = result.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">')
+  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
 
   return wrapHtml(result)
 }

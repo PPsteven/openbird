@@ -4,7 +4,7 @@
 
 ## 当前焦点
 
-D2 实现完成，本地验证 6 个命令全部通过。准备进入 D3 (Images)。
+D3 实现完成，本地验证图片上传+渲染+访问全部通过。准备进入 D4 (Namespace)。
 
 ## 进度
 
@@ -13,7 +13,7 @@ D2 实现完成，本地验证 6 个命令全部通过。准备进入 D3 (Images
 - [x] 项目结构确定（spec 驱动）
 - [x] D1: Worker Core — register/publish/list/remove + 页面展示
 - [x] D2: CLI Core — login/publish/list/remove + 映射文件
-- [ ] D3: Images — R2 上传 + CLI 自动重写
+- [x] D3: Images — R2 上传 + CLI 自动重写
 - [ ] D4: Namespace — @username/slug 永久 URL
 
 ## 已知问题
@@ -21,6 +21,7 @@ D2 实现完成，本地验证 6 个命令全部通过。准备进入 D3 (Images
 - workers.dev 子域名刚注册，DNS 传播中，远程 curl 暂时连接超时。本地 `wrangler dev` 全部 5 个端点验证通过
 - `wrangler.toml` 中的 `routes`（custom_domain）部署失败，需在 Cloudflare Dashboard 手动绑定域名
 - `npm install` 在 worker/ 目录下超时（sharp 编译耗时过长），wrangler 已全局安装，不依赖本地 node_modules
+- Worker 端 markdown 渲染中图片正则 `![]()` 必须在链接正则 `[]()` 之前匹配，否则图片被渲染为链接
 
 ## 踩坑记录
 
@@ -33,9 +34,8 @@ D2 实现完成，本地验证 6 个命令全部通过。准备进入 D3 (Images
 
 ## 下一步
 
-实现 D3 (Images)：
-1. 读取 docs/D3-images.md
-2. Worker 端新增 /api/v1/upload 端点（R2 存储图片）
-3. CLI 端新增 images.js — 扫描 markdown 中的本地图片，上传后重写 URL
-4. publish 流程集成图片上传步骤
-5. 验证：发布含本地图片的 md，浏览器打开确认图片正常显示
+实现 D4 (Namespace)：
+1. 读取 docs/D4-namespace.md
+2. Worker 端新增 @username/slug 命名空间路由
+3. CLI 端新增 --namespace 参数
+4. 验证：CLI --namespace 发布后通过 @username/slug 访问

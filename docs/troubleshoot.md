@@ -92,6 +92,22 @@ curl -X POST http://localhost:8787/api/v1/register \
 
 `wrangler` 已全局安装时，`worker/package.json` 中的 devDependencies 仅在需要特定版本时才需安装。`wrangler deploy` 直接可用，无需 `npm install`。
 
+---
+
+## Worker Markdown 渲染
+
+### 图片正则必须在链接正则之前
+
+Worker 的 markdown 渲染器中，`![]()`（图片）和 `[]()`（链接）共用相似的正则模式。如果链接正则先执行，`![photo](url)` 会被 `[]()` 正则捕获为 `!<a href="url">photo</a>`，导致图片无法渲染。
+
+**修复**：交换正则执行顺序，图片先匹配。
+
+```javascript
+// ✅ 正确顺序
+result = result.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">')
+result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+```
+
 ### 查看已部署版本
 
 即使 Worker 没有绑定 route，仍可通过以下命令确认版本已成功上传：
