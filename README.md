@@ -105,7 +105,7 @@ export OPENBIRD_API_URL="https://openbird.your-subdomain.workers.dev"
 openbird login
 ```
 
-首次使用会自动注册账号。浏览器将打开登录页面，完成授权后 token 自动保存到 `~/.config/openbird/credentials`。
+浏览器将打开登录页面，完成授权后 token 自动保存到 `~/.config/openbird/credentials`。
 
 如果浏览器不可用，也可以手动粘贴 API Key（`ob_` 开头）：
 ```bash
@@ -302,11 +302,11 @@ Worker 内置零依赖 Markdown 渲染器，支持：
 
 ## API 文档
 
-所有 API 需要 `Authorization: Bearer ob_xxx` 请求头（register 和 guest publish 除外）。
+所有 API 需要 `Authorization: Bearer ob_xxx` 请求头（guest publish 除外）。
 
 ### POST /api/v1/register
 
-注册新用户。若 email 匹配部署时设置的 `ADMIN_EMAIL`，则自动通过并返回 API Key。
+注册已关闭。首个管理员账号在部署时通过 `ADMIN_EMAIL` / `ADMIN_PASSWORD` 环境变量自动创建。
 
 ```bash
 curl -X POST https://openbird.jhao.space/api/v1/register \
@@ -314,11 +314,10 @@ curl -X POST https://openbird.jhao.space/api/v1/register \
   -d '{"email":"user@example.com","password":"your-password"}'
 ```
 
-响应（201）：
+响应（403）：
 ```json
 {
-  "userId": "user_abc123def456",
-  "apiKey": "ob_4da6f24d41887be954edc569..."
+  "error": "Registration is closed"
 }
 ```
 
@@ -476,7 +475,7 @@ cd worker
 wrangler dev
 # → Ready on http://localhost:8787
 
-# 在另一个终端测试
+# 在另一个终端测试（注册已关闭，返回 403）
 curl -X POST http://localhost:8787/api/v1/register \
   -H "Content-Type: application/json" \
   -d '{"email":"test@test.com","password":"123456"}'

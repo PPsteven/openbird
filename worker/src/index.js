@@ -27,81 +27,12 @@ export default {
   }
 }
 
+// Registration is permanently disabled.
+// The first admin user is created during initial deployment
+// via ADMIN_EMAIL / ADMIN_PASSWORD env vars.
+// This endpoint is kept to return a clear error instead of 404.
 async function handleRegister(request, env) {
-  try {
-    const { email, password } = await request.json()
-    if (!email || !password) {
-      return json({ error: "Email and password are required" }, 400)
-    }
-
-    const adminEmail = env.ADMIN_EMAIL
-    const adminPassword = env.ADMIN_PASSWORD
-
-    if (adminEmail && adminPassword && email === adminEmail) {
-      if (password !== adminPassword) {
-        return json({ error: "Invalid password" }, 401)
-      }
-
-      let userId = await env.USERS.get("email:" + email)
-      let apiKey
-
-      if (userId) {
-        const userData = await env.USERS.get("user:" + userId)
-        const user = JSON.parse(userData)
-        apiKey = "ob_" + randomHex(32)
-        const keyHash = await sha256(apiKey)
-        const now = new Date().toISOString()
-        user.keys.push({ prefix: apiKey.slice(0, 7), hash: keyHash, createdAt: now })
-        await env.USERS.put("user:" + userId, JSON.stringify(user))
-        await env.USERS.put("apikey:" + keyHash, JSON.stringify({ userId, createdAt: now }))
-      } else {
-        userId = "user_admin_" + randomHex(8)
-        apiKey = "ob_" + randomHex(32)
-        const passwordHash = await sha256(password)
-        const keyHash = await sha256(apiKey)
-        const now = new Date().toISOString()
-
-        const user = {
-          id: userId, email, passwordHash,
-          keys: [{ prefix: apiKey.slice(0, 7), hash: keyHash, createdAt: now }],
-          createdAt: now
-        }
-
-        await env.USERS.put("user:" + userId, JSON.stringify(user))
-        await env.USERS.put("email:" + email, userId)
-        await env.USERS.put("apikey:" + keyHash, JSON.stringify({ userId, createdAt: now }))
-      }
-
-      return json({ userId, apiKey }, 201)
-    }
-
-    const existing = await env.USERS.get("email:" + email)
-    if (existing) {
-      return json({ error: "Email already registered" }, 400)
-    }
-
-    const userId = "user_" + randomHex(12)
-    const apiKey = "ob_" + randomHex(32)
-    const passwordHash = await sha256(password)
-    const keyHash = await sha256(apiKey)
-    const now = new Date().toISOString()
-
-    const user = {
-      id: userId,
-      email,
-      passwordHash,
-      keys: [{ prefix: apiKey.slice(0, 7), hash: keyHash, createdAt: now }],
-      createdAt: now
-    }
-
-    await env.USERS.put("user:" + userId, JSON.stringify(user))
-    await env.USERS.put("email:" + email, userId)
-    await env.USERS.put("apikey:" + keyHash, JSON.stringify({ userId, createdAt: now }))
-
-    return json({ userId, apiKey }, 201)
-  } catch (e) {
-    return json({ error: "Invalid request body" }, 400)
-  }
+  return json({ error: "Registration is closed" }, 403)
 }
 
 async function verifyAuth(request, env) {
