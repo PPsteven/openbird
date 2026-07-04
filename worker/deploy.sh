@@ -70,11 +70,11 @@ create_or_get_kv() {
   echo "$id"
 }
 
-USERS_KV_ID=$(create_or_get_kv "OPENBIRD_USERS")
-echo -e "  OPENBIRD_USERS: ${GREEN}${USERS_KV_ID}${NC}"
+USERS_KV_ID=$(create_or_get_kv "USERS")
+echo -e "  USERS: ${GREEN}${USERS_KV_ID}${NC}"
 
-DOCS_KV_ID=$(create_or_get_kv "OPENBIRD_DOCS")
-echo -e "  OPENBIRD_DOCS: ${GREEN}${DOCS_KV_ID}${NC}"
+DOCS_KV_ID=$(create_or_get_kv "DOCS")
+echo -e "  DOCS: ${GREEN}${DOCS_KV_ID}${NC}"
 
 # === 5. Create R2 buckets ===
 echo ""
@@ -91,12 +91,16 @@ cp wrangler.toml.template wrangler.toml
 
 if [ "$(uname)" = "Darwin" ]; then
   sed -i '' "s|{{OPENBIRD_DOMAIN}}|${OPENBIRD_DOMAIN}|g" wrangler.toml
-  sed -i '' "s|{{OPENBIRD_USERS_KV_ID}}|${USERS_KV_ID}|g" wrangler.toml
-  sed -i '' "s|{{OPENBIRD_DOCS_KV_ID}}|${DOCS_KV_ID}|g" wrangler.toml
+  sed -i '' "s|{{USERS_KV_ID}}|${USERS_KV_ID}|g" wrangler.toml
+  sed -i '' "s|{{DOCS_KV_ID}}|${DOCS_KV_ID}|g" wrangler.toml
+  sed -i '' "s|{{ADMIN_EMAIL}}|${ADMIN_EMAIL:-admin}|g" wrangler.toml
+  sed -i '' "s|{{ADMIN_PASSWORD}}|${ADMIN_PASSWORD:-change-me}|g" wrangler.toml
 else
   sed -i "s|{{OPENBIRD_DOMAIN}}|${OPENBIRD_DOMAIN}|g" wrangler.toml
-  sed -i "s|{{OPENBIRD_USERS_KV_ID}}|${USERS_KV_ID}|g" wrangler.toml
-  sed -i "s|{{OPENBIRD_DOCS_KV_ID}}|${DOCS_KV_ID}|g" wrangler.toml
+  sed -i "s|{{USERS_KV_ID}}|${USERS_KV_ID}|g" wrangler.toml
+  sed -i "s|{{DOCS_KV_ID}}|${DOCS_KV_ID}|g" wrangler.toml
+  sed -i "s|{{ADMIN_EMAIL}}|${ADMIN_EMAIL:-admin}|g" wrangler.toml
+  sed -i "s|{{ADMIN_PASSWORD}}|${ADMIN_PASSWORD:-change-me}|g" wrangler.toml
 fi
 
 if [ "$IS_WORKERS_DEV" = true ]; then
