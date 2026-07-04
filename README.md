@@ -28,6 +28,26 @@ wrangler login
 
 ### 1. 部署后端
 
+#### 方式一：一键脚本（推荐）
+
+```bash
+git clone https://github.com/PPsteven/openbird.git
+cd openbird/worker
+
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env，设置你的域名：
+#   自定义域名:  OPENBIRD_DOMAIN=openbird.yourdomain.com
+#   workers.dev: OPENBIRD_DOMAIN=openbird.yoursubdomain.workers.dev
+
+chmod +x deploy.sh
+./deploy.sh
+```
+
+脚本会自动创建 KV namespaces、R2 buckets、生成 `wrangler.toml` 并执行部署。
+
+#### 方式二：手动部署
+
 ```bash
 git clone https://github.com/PPsteven/openbird.git
 cd openbird/worker
