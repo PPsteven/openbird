@@ -1,0 +1,25 @@
+name = "openbird"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+routes = [
+  { pattern = "{{OPENBIRD_DOMAIN}}", custom_domain = true }
+]
+
+vars = { SHARE_URL = "https://{{OPENBIRD_DOMAIN}}" }
+
+[[kv_namespaces]]
+binding = "OPENBIRD_USERS"
+id = "{{OPENBIRD_USERS_KV_ID}}"
+
+[[kv_namespaces]]
+binding = "OPENBIRD_DOCS"
+id = "{{OPENBIRD_DOCS_KV_ID}}"
+
+[[r2_buckets]]
+binding = "PAGES"
+bucket_name = "openbird-pages"
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "openbird-images"

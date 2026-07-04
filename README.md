@@ -29,7 +29,7 @@ wrangler login
 ### 1. 部署后端
 
 ```bash
-git clone https://github.com/jhao104/openbird.git
+git clone https://github.com/PPsteven/openbird.git
 cd openbird/worker
 
 # 创建 KV namespaces（记录输出的 id）
