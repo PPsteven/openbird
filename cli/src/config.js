@@ -5,7 +5,7 @@ import { join } from "node:path"
 const CONFIG_DIR = join(homedir(), ".config", "openbird")
 const CREDENTIALS_FILE = join(CONFIG_DIR, "credentials")
 
-export const API_BASE = process.env.OPENBIRD_API_URL || "https://openbird.example.com"
+export const API_BASE = process.env.OPENBIRD_API_URL || "https://openbird.jhao.space"
 export const VERSION = "0.1.0"
 export const USER_AGENT = `openbird-cli/${VERSION}`
 

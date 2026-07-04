@@ -174,11 +174,11 @@ async function handlePublish(request, env) {
     await env.DOCS.put(kvKey, JSON.stringify(meta))
     await env.DOCS.put(`user:${auth.userId}:docs:@${auth.user.username}/${slugParam}`, "1")
 
-    const shareUrl = env.SHARE_URL || "https://openbird.example.com"
+    const baseUrl = getBaseUrl(request)
     return json({
       slug: slugParam,
       username: auth.user.username,
-      url: `${shareUrl}/@${auth.user.username}/${slugParam}`,
+      url: `${baseUrl}/@${auth.user.username}/${slugParam}`,
       title,
       expiresAt: null,
       ttlDays: null,
@@ -230,12 +230,12 @@ async function handlePublish(request, env) {
   await env.DOCS.put("doc:" + slug, JSON.stringify(meta), { expirationTtl: 90 * 86400 })
   await env.DOCS.put("user:" + auth.userId + ":docs:" + slug, "1", { expirationTtl: 90 * 86400 })
 
-  const shareUrl = (env.SHARE_URL || "https://openbird.example.com") + "/" + slug
+  const baseUrl = getBaseUrl(request)
 
   return json({
     slug,
     username: null,
-    url: shareUrl,
+    url: `${baseUrl}/${slug}`,
     title,
     expiresAt,
     ttlDays: 90,
@@ -304,9 +304,9 @@ async function handleGuestPublish(request, env) {
   const meta = { slug, title, guest: true, source: "guest", createdAt: now, expiresAt, ttlMinutes: 60 }
   await env.DOCS.put("guest:" + slug, JSON.stringify(meta), { expirationTtl: 3600 })
 
-  const shareUrl = env.SHARE_URL || "https://openbird.example.com"
+  const baseUrl = getBaseUrl(request)
   return json({
-    slug, url: `${shareUrl}/${slug}`,
+    slug, url: `${baseUrl}/${slug}`,
     title, expiresAt, ttlMinutes: 60, guest: true
   }, 201)
 }
@@ -337,12 +337,12 @@ async function handleList(request, env) {
       const docData = await env.DOCS.get("ns:" + suffix.slice(1))
       if (!docData) continue
       const doc = JSON.parse(docData)
-      const shareUrl = (env.SHARE_URL || "https://openbird.example.com") + "/@" + doc.username + "/" + doc.slug
+      const baseUrl = getBaseUrl(request)
       docs.push({
         slug: doc.slug,
         username: doc.username,
         title: doc.title,
-        url: shareUrl,
+        url: `${baseUrl}/@${doc.username}/${doc.slug}`,
         source: doc.source,
         updatedAt: doc.updatedAt,
         expiresAt: null
@@ -351,12 +351,12 @@ async function handleList(request, env) {
       const docData = await env.DOCS.get("doc:" + suffix)
       if (!docData) continue
       const doc = JSON.parse(docData)
-      const shareUrl = (env.SHARE_URL || "https://openbird.example.com") + "/" + suffix
+      const baseUrl = getBaseUrl(request)
       docs.push({
         slug: doc.slug,
         username: null,
         title: doc.title,
-        url: shareUrl,
+        url: `${baseUrl}/${suffix}`,
         source: doc.source,
         updatedAt: doc.updatedAt,
         expiresAt: doc.expiresAt
@@ -475,8 +475,8 @@ async function handleUploadImage(request, env) {
   const key = `images/${auth.userId}/${randomHex(16)}${ext}`
   await env.IMAGES.put(key, buffer, { httpMetadata: { contentType } })
 
-  const shareUrl = env.SHARE_URL || "https://openbird.example.com"
-  return json({ url: `${shareUrl}/${key}` }, 201)
+  const baseUrl = getBaseUrl(request)
+  return json({ url: `${baseUrl}/${key}` }, 201)
 }
 
 async function serveImage(path, env) {
@@ -523,6 +523,11 @@ async function handleUpdateAccount(request, env) {
   auth.user.username = username
   await env.USERS.put("user:" + auth.userId, JSON.stringify(auth.user))
   return json({ username })
+}
+
+function getBaseUrl(request) {
+  const url = new URL(request.url)
+  return `${url.protocol}//${url.host}`
 }
 
 function extractTitle(markdown) {
