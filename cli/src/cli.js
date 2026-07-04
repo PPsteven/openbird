@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from "node:fs"
 import { basename } from "node:path"
 import { createInterface } from "node:readline"
 import { getApiKey, saveApiKey, getCredentialsPath, API_BASE, VERSION } from "./config.js"
-import { publish, listDocuments, removeDocument } from "./api.js"
+import { publish, listDocuments, removeDocument, anonymousPublish } from "./api.js"
 import { readMappings, setMapping, removeMapping, writeMappings } from "./mapping.js"
 import { startCallbackServer, openBrowser } from "./login.js"
 import { isAllowedFile, ALLOWED_EXTENSIONS } from "./files.js"
@@ -99,14 +99,15 @@ function askQuestion(question) {
 }
 
 function parsePublishArgs(fileArgs) {
-  let slug = null, namespaced = false
+  let slug = null, namespaced = false, temp = false
   const files = []
   for (let i = 0; i < fileArgs.length; i++) {
     if (fileArgs[i] === "--slug" && i + 1 < fileArgs.length) { slug = fileArgs[++i] }
     else if (fileArgs[i] === "--namespace" && i + 1 < fileArgs.length) { slug = fileArgs[++i]; namespaced = true }
+    else if (fileArgs[i] === "--temp") { temp = true }
     else files.push(fileArgs[i])
   }
-  return { slug, namespaced, files }
+  return { slug, namespaced, temp, files }
 }
 
 function parseSlugValue(value) {
@@ -118,13 +119,13 @@ function parseSlugValue(value) {
 }
 
 async function cmdPublish(publishArgs) {
+  const { slug: explicitSlug, namespaced, temp, files: positional } = parsePublishArgs(publishArgs)
+
   const apiKey = getApiKey()
-  if (!apiKey) {
-    console.error("✗ Not logged in. Run `openbird login` first.")
+  if (!apiKey && !temp) {
+    console.error("✗ Not logged in. Run `openbird login` first, or use `--temp`.")
     process.exit(1)
   }
-
-  const { slug: explicitSlug, namespaced, files: positional } = parsePublishArgs(publishArgs)
 
   let filename = null
   let markdown
@@ -148,7 +149,9 @@ async function cmdPublish(publishArgs) {
     }
     markdown = readFileSync(filePath, "utf-8")
     filename = filePath
-    markdown = await uploadAndRewriteImages(markdown, filename)
+    if (!temp) {
+      markdown = await uploadAndRewriteImages(markdown, filename)
+    }
   }
 
   let slug = explicitSlug
@@ -161,6 +164,17 @@ async function cmdPublish(publishArgs) {
       slug = parsed.slug
       isNamespaced = parsed.namespaced
     }
+  }
+
+  if (temp) {
+    try {
+      const result = await anonymousPublish({ markdown, slug: explicitSlug })
+      console.log(`⚡ Published (temp, 1h) → ${result.url}`)
+    } catch (e) {
+      console.error(`✗ Publish failed: ${e.message}`)
+      process.exit(1)
+    }
+    return
   }
 
   try {
@@ -297,6 +311,7 @@ Usage:
   openbird publish <file.md>              Publish or update a document
   openbird publish --slug <slug> <file>   Update a specific document
   openbird publish --namespace <slug>     Publish to @username/slug namespace
+  openbird publish --temp <file.md>       Publish a temporary page (1h, no login)
   openbird publish                        Read from stdin
   openbird remove <file.md|slug>          Delete a document
   openbird remove --namespace <slug>      Delete a namespaced document

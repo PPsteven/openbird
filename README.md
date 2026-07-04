@@ -73,8 +73,9 @@ wrangler deploy
 <details>
 <summary>可选：绑定自定义域名</summary>
 
-在 Cloudflare Dashboard 中：
-1. Workers & Pages → openbird → Settings → Domains & Routes
+两种方式部署完成后，均可绑定自定义域名：
+
+1. Cloudflare Dashboard → Workers & Pages → openbird → Settings → Domains & Routes
 2. 添加自定义域名（如 `openbird.yourdomain.com`）
 </details>
 

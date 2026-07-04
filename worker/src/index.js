@@ -5,7 +5,13 @@ export default {
     const method = request.method
 
     if (path === "/api/v1/register" && method === "POST") return handleRegister(request, env)
-    if (path === "/api/v1/publish" && method === "POST") return handlePublish(request, env)
+    if (path === "/api/v1/publish" && method === "POST") {
+      const auth = request.headers.get("Authorization")
+      if (auth && auth.startsWith("Bearer ob_")) {
+        return handlePublish(request, env)
+      }
+      return handleGuestPublish(request, env)
+    }
     if (path === "/api/v1/documents" && method === "GET") return handleList(request, env)
     if (path === "/api/v1/documents" && method === "DELETE") return handleRemove(request, env)
     if (path === "/api/v1/upload-image" && method === "POST") return handleUploadImage(request, env)
@@ -24,6 +30,47 @@ async function handleRegister(request, env) {
     const { email, password } = await request.json()
     if (!email || !password) {
       return json({ error: "Email and password are required" }, 400)
+    }
+
+    const adminEmail = env.ADMIN_EMAIL
+    const adminPassword = env.ADMIN_PASSWORD
+
+    if (adminEmail && adminPassword && email === adminEmail) {
+      if (password !== adminPassword) {
+        return json({ error: "Invalid password" }, 401)
+      }
+
+      let userId = await env.USERS.get("email:" + email)
+      let apiKey
+
+      if (userId) {
+        const userData = await env.USERS.get("user:" + userId)
+        const user = JSON.parse(userData)
+        apiKey = "ob_" + randomHex(32)
+        const keyHash = await sha256(apiKey)
+        const now = new Date().toISOString()
+        user.keys.push({ prefix: apiKey.slice(0, 7), hash: keyHash, createdAt: now })
+        await env.USERS.put("user:" + userId, JSON.stringify(user))
+        await env.USERS.put("apikey:" + keyHash, JSON.stringify({ userId, createdAt: now }))
+      } else {
+        userId = "user_admin_" + randomHex(8)
+        apiKey = "ob_" + randomHex(32)
+        const passwordHash = await sha256(password)
+        const keyHash = await sha256(apiKey)
+        const now = new Date().toISOString()
+
+        const user = {
+          id: userId, email, passwordHash,
+          keys: [{ prefix: apiKey.slice(0, 7), hash: keyHash, createdAt: now }],
+          createdAt: now
+        }
+
+        await env.USERS.put("user:" + userId, JSON.stringify(user))
+        await env.USERS.put("email:" + email, userId)
+        await env.USERS.put("apikey:" + keyHash, JSON.stringify({ userId, createdAt: now }))
+      }
+
+      return json({ userId, apiKey }, 201)
     }
 
     const existing = await env.USERS.get("email:" + email)
@@ -196,6 +243,86 @@ async function handlePublish(request, env) {
   }, isNew ? 201 : 200)
 }
 
+async function handleGuestPublish(request, env) {
+  let body
+  try { body = await request.json() } catch {
+    return json({ error: "Invalid request body" }, 400)
+  }
+
+  const { markdown, title: titleParam, slug: slugParam, temp } = body
+
+  if (!temp) {
+    return json({ error: "Invalid API key" }, 401)
+  }
+
+  if (!markdown || typeof markdown !== "string" || markdown.trim().length === 0) {
+    return json({ error: "Missing markdown field" }, 400)
+  }
+
+  const markdownBytes = new TextEncoder().encode(markdown).length
+  if (markdownBytes > 262144) {
+    return json({ error: "Markdown too large (max 262144 bytes)" }, 413)
+  }
+
+  let slug
+  if (slugParam) {
+    if (!/^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/.test(slugParam)) {
+      return json({ error: "Invalid slug format" }, 400)
+    }
+    const [existingDoc, existingGuest] = await Promise.all([
+      env.DOCS.get("doc:" + slugParam),
+      env.DOCS.get("guest:" + slugParam)
+    ])
+    if (existingDoc || existingGuest) {
+      return json({ error: "Slug already taken" }, 409)
+    }
+    slug = slugParam
+  } else {
+    slug = await allocateGuestSlug(env)
+    if (!slug) {
+      return json({ error: "Failed to allocate document slug" }, 503)
+    }
+  }
+
+  const title = titleParam || extractTitle(markdown) || "Untitled"
+  const html = renderMarkdown(markdown)
+
+  const htmlBytes = new TextEncoder().encode(html).length
+  if (htmlBytes > 524288) {
+    return json({ error: "Rendered HTML too large (max 524288 bytes)" }, 413)
+  }
+
+  const now = new Date().toISOString()
+  const expiresAt = new Date(Date.now() + 3600000).toISOString()
+
+  const htmlKey = `pages/guest/${slug}/index.html`
+  await env.PAGES.put(htmlKey, html, {
+    httpMetadata: { contentType: "text/html" },
+    customMetadata: { title, slug, guest: "true", createdAt: now, expiresAt }
+  })
+
+  const meta = { slug, title, guest: true, source: "guest", createdAt: now, expiresAt, ttlMinutes: 60 }
+  await env.DOCS.put("guest:" + slug, JSON.stringify(meta), { expirationTtl: 3600 })
+
+  const shareUrl = env.SHARE_URL || "https://openbird.example.com"
+  return json({
+    slug, url: `${shareUrl}/${slug}`,
+    title, expiresAt, ttlMinutes: 60, guest: true
+  }, 201)
+}
+
+async function allocateGuestSlug(env) {
+  for (let i = 0; i < 5; i++) {
+    const slug = generateSlug()
+    const [existingDoc, existingGuest] = await Promise.all([
+      env.DOCS.get("doc:" + slug),
+      env.DOCS.get("guest:" + slug)
+    ])
+    if (!existingDoc && !existingGuest) return slug
+  }
+  return null
+}
+
 async function handleList(request, env) {
   const auth = await verifyAuth(request, env)
   if (!auth) return json({ error: "Invalid API key" }, 401)
@@ -291,7 +418,17 @@ async function handleRemove(request, env) {
 }
 
 async function servePage(slug, env) {
-  const obj = await env.PAGES.get("pages/" + slug + "/index.html")
+  let obj = await env.PAGES.get("pages/" + slug + "/index.html")
+  if (obj) {
+    return new Response(obj.body, {
+      headers: {
+        "Content-Type": "text/html",
+        "Cache-Control": "public, max-age=3600"
+      }
+    })
+  }
+
+  obj = await env.PAGES.get("pages/guest/" + slug + "/index.html")
   if (!obj) {
     return new Response("Not Found", { status: 404 })
   }
@@ -299,7 +436,8 @@ async function servePage(slug, env) {
   return new Response(obj.body, {
     headers: {
       "Content-Type": "text/html",
-      "Cache-Control": "public, max-age=3600"
+      "Cache-Control": "public, max-age=300",
+      "X-Guest-Page": "true"
     }
   })
 }
