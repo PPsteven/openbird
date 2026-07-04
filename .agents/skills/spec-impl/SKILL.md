@@ -171,7 +171,7 @@ Summarize any pitfalls, workarounds, or non-obvious findings from this spec's im
 Export the full conversation transcript for future reference:
 
 ```bash
-./scripts/export-session.sh D{N}-{spec-short-name}
+bash .agents/skills/spec-impl/scripts/export-session.sh D{N}-{spec-short-name}
 ```
 
 This runs `opencode export <session-id> --sanitize` to save the raw JSON transcript to `docs/history/D{N}-{spec-short-name}.json`.
