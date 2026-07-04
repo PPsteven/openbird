@@ -10,6 +10,27 @@ Implements specs from a spec-driven project. Follows a strict workflow: read con
 
 ## Workflow
 
+```mermaid
+flowchart TD
+    Start([New Session]) --> Step0[Step 0: Clear Context]
+    Step0 --> Step1[Step 1: Read Context<br/>AGENTS.md + architecture.md + status.md + troubleshoot.md]
+    Step1 --> Step2[Step 2: Read Target Spec<br/>docs/DN-xxx.md]
+    Step2 --> Step3{Use worktree?}
+    Step3 -->|Yes| WT[Step 3: git worktree add]
+    Step3 -->|No| Impl
+    WT --> Impl[Step 4: Implement]
+    Impl --> Sub{Complex spec?}
+    Sub -->|Yes| SubA[Delegate to subagents]
+    SubA --> Merge[Merge results]
+    Sub -->|No| Code[Write code directly]
+    Code --> Verify
+    Merge --> Verify[Step 5: Verify]
+    Verify -->|Fail| Fix[Diagnose & fix] --> Verify
+    Verify -->|Pass| Step6[Step 6: Update Status<br/>status.md + architecture.md + commit]
+    Step6 --> Step7[Step 7: Log Lessons Learned<br/>Update troubleshoot.md]
+    Step7 --> End([Session End])
+```
+
 ### Step 0: New Session (Clear Context)
 
 Implementation must start in a **new agent session**. The design-phase conversation carries irrelevant context (architecture debates, spec structure discussions). All necessary information is already captured in `docs/` files.
@@ -72,17 +93,16 @@ For each component in the spec:
 
 **For complex specs, use subagents for parallel work:**
 
-```
-┌─ main agent ──────────────────────────┐
-│  1. Read spec                          │
-│  2. Split into independent components  │
-│  3. Delegate to subagents              │
-│     ├─ subagent A: implement component X
-│     ├─ subagent B: implement component Y
-│     └─ subagent C: implement component Z
-│  4. Merge results                      │
-│  5. Run verification                   │
-└────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    Main[Main Agent] --> Split[Split into<br/>independent components]
+    Split --> A[Subagent A<br/>Component X]
+    Split --> B[Subagent B<br/>Component Y]
+    Split --> C[Subagent C<br/>Component Z]
+    A --> Merge[Merge Results]
+    B --> Merge
+    C --> Merge
+    Merge --> Verify[Run Verification]
 ```
 
 When to use subagents:
