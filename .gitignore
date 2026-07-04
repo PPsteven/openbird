@@ -1,0 +1,10 @@
+node_modules/
+.dev.vars
+.wrangler/
+.env
+wrangler.toml
+.openbird
+docs/history/
+.agents/
+AGENTS.md
+docs/
