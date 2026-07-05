@@ -91,7 +91,18 @@ openbird --version
 # → openbird v0.1.0
 ```
 
-### 3. 设置 API 地址（可选）
+### 3. 安装 Obsidian 插件（可选）
+
+如果希望在 Obsidian 内直接发布当前笔记，可以安装本仓库内置的零构建插件：
+
+```bash
+mkdir -p /path/to/vault/.obsidian/plugins/openbird
+cp openbird/obsidian-plugin/manifest.json openbird/obsidian-plugin/main.js openbird/obsidian-plugin/openbird-core.js /path/to/vault/.obsidian/plugins/openbird/
+```
+
+然后在 Obsidian 的社区插件设置中启用 `OpenBird`。插件支持发布当前 Markdown 笔记、1 小时临时发布、自定义 slug 发布和删除已发布笔记。
+
+### 4. 设置 API 地址（可选）
 
 默认使用公开服务 `https://openbird.jhao.space`，无需额外配置。如需自托管，指向你的 Worker 地址：
 
@@ -99,7 +110,7 @@ openbird --version
 export OPENBIRD_API_URL="https://openbird.your-subdomain.workers.dev"
 ```
 
-### 4. 登录
+### 5. 登录
 
 ```bash
 openbird login
@@ -119,7 +130,7 @@ export OPENBIRD_API_KEY="ob_your_api_key_here"
 > # → ⚡ Published (temp, 1h) → https://openbird.jhao.space/warm-clear-seed
 > ```
 
-### 5. 发布第一篇文档
+### 6. 发布第一篇文档
 
 ```bash
 echo "# Hello OpenBird" > hello.md
@@ -510,15 +521,20 @@ pagebird/
 │   ├── src/index.js          # Worker 主程序
 │   ├── wrangler.toml         # Worker 配置
 │   └── package.json
-└── cli/                      # CLI 工具
-    ├── src/
-    │   ├── cli.js            # 命令行入口
-    │   ├── api.js            # API 客户端
-    │   ├── config.js         # 配置管理
-    │   ├── files.js          # 文件类型校验
-    │   ├── images.js         # 图片上传与重写
-    │   ├── login.js          # 登录流程
-    │   └── mapping.js        # .openbird 映射管理
+├── cli/                      # CLI 工具
+│   ├── src/
+│   │   ├── cli.js            # 命令行入口
+│   │   ├── api.js            # API 客户端
+│   │   ├── config.js         # 配置管理
+│   │   ├── files.js          # 文件类型校验
+│   │   ├── images.js         # 图片上传与重写
+│   │   ├── login.js          # 登录流程
+│   │   └── mapping.js        # .openbird 映射管理
+│   └── package.json
+└── obsidian-plugin/          # Obsidian 插件
+    ├── main.js               # 插件入口
+    ├── openbird-core.js      # 发布与图片改写核心逻辑
+    ├── manifest.json         # Obsidian 插件清单
     └── package.json
 ```
 
