@@ -1,0 +1,11 @@
+{
+  "name": "openbird-obsidian-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Obsidian plugin wrapper for OpenBird publishing",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT"
+}
