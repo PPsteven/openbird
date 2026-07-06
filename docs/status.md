@@ -4,7 +4,7 @@
 
 ## 当前焦点
 
-全部 9 个 Spec 已完成。项目进入维护阶段。
+全部 Spec 已完成。项目进入维护和优化阶段。
 
 ## 进度
 
@@ -19,12 +19,13 @@
 - [x] D6: 文档完善 — README.md 使用文档
 - [x] D7: 一键部署脚本 — deploy.sh 模板渲染
 - [x] D8: 零配置发布 — 匿名 1h 临时链接 + Worker 内置默认账户
-- [x] D9: 落地页 Spec 编写（docs/D9-landing-page.md）— 复刻 JotBird 官网设计，内容改 OpenBird
-- [x] D9: 落地页实现（site/index.html + GitHub Actions 部署）
+- [x] D9: 落地页 Spec 编写 + 实现（site/index.html + GitHub Actions 部署）
+- [x] D8: Worker 落地页服务 — 内联 site/ 到 Worker 源码，`GET /` 返回 index.html
+- [x] D9: Admin Register — 仅 admin 可通过 CLI 创建新用户
 
 ## 已知问题
 
-- workers.dev 远程 curl 连接超时。DNS 可解析但 TCP 握手失败（IPv4/IPv6 均超时），疑似部分地区网络限制。本地 `wrangler dev` 全部 12 个端点验证通过
+- workers.dev 远程 curl 连接超时。DNS 可解析但 TCP 握手失败（IPv4/IPv6 均超时），疑似部分地区网络限制。本地 `wrangler dev` 全部端点验证通过
 - `wrangler.toml` 中的 `routes`（custom_domain）部署失败，需在 Cloudflare Dashboard 手动绑定域名
 - `npm install` 在 worker/ 目录下超时（sharp 编译耗时过长），wrangler 已全局安装，不依赖本地 node_modules
 - Worker 端 markdown 渲染中图片正则 `![]()` 必须在链接正则 `[]()` 之前匹配，否则图片被渲染为链接
@@ -40,10 +41,11 @@
 - **D5: handlePublish 指定 slug 创建新文档时返回 404** — 当 `slugParam` 提供但文档不存在时，原代码返回 `"Document not found"`，应直接创建新文档。修复：删除 `else { return json({ error: "Document not found" }, 404) }` 分支
 - **D5: 响应格式不一致** — `handleRemove` 返回 `{"ok":true}` 而非 `{"success":true}`；`handleUpdateAccount` 返回 `{"username":"ppsteven"}` 而非 `{"success":true}`。这是设计选择，非 bug，但 D5 验证脚本需适配实际格式
 - **D9: 落地页为何不直接用 Tailwind** — 复刻 JotBird 设计时，Tailwind Play CDN 依赖外部资源且违反项目"零依赖"约定，编译产出需 npm 构建步骤。最终选纯静态 HTML + 内联 CSS：从 JotBird 的 Tailwind utility class 反推为等价 `:root` token + 语义化 class，单文件即可部署到 GitHub Pages，零构建。详见 D9「设计说明」
+- **D8/D9: seedAdminUser 必须在 export default 之前定义** — `seedAdminUser` 调用 `randomHex` 和 `sha256`，这两个函数在文件末尾定义（`function` 声明提升）。如果写成 `const randomHex = ...` 箭头函数则因 temporal dead zone 报错。确保使用 `function` 声明而非 `const` 赋值
+- **D8/D9: 静态资源字符串使用模板字面量** — `LANDING_HTML` 等常量使用反引号模板字面量，HTML 中的 `${}` 模板语法需转义为 `\${}`，否则 JS 会尝试插值。site/index.html 不含 `${}` 所以安全
 
 ## 下一步
 
-项目功能开发完成。后续可考虑：
 - 在可访问 Cloudflare Workers 的网络环境中完成远程冒烟测试
 - 绑定自定义域名（openbird.example.com）
 - Worker 端 login 页面实现（配合 CLI callback server）

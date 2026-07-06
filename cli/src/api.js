@@ -51,6 +51,12 @@ export async function anonymousPublish({ markdown, slug }) {
   return data
 }
 
+export async function registerUser({ email, password }) {
+  const body = { email }
+  if (password) body.password = password
+  return apiRequest("POST", "/api/v1/register", body)
+}
+
 export async function removeDocument(slug, { namespaced = false } = {}) {
   let url = `/api/v1/documents?slug=${encodeURIComponent(slug)}`
   if (namespaced) url += "&namespaced=true"

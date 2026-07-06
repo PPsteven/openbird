@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from "node:fs"
 import { basename } from "node:path"
 import { createInterface } from "node:readline"
 import { getApiKey, saveApiKey, getCredentialsPath, API_BASE, VERSION } from "./config.js"
-import { publish, listDocuments, removeDocument, anonymousPublish } from "./api.js"
+import { publish, listDocuments, removeDocument, anonymousPublish, registerUser } from "./api.js"
 import { readMappings, setMapping, removeMapping, writeMappings } from "./mapping.js"
 import { startCallbackServer, openBrowser } from "./login.js"
 import { isAllowedFile, ALLOWED_EXTENSIONS } from "./files.js"
@@ -16,6 +16,7 @@ const command = args[0]
 async function main() {
   switch (command) {
     case "login": return cmdLogin()
+    case "register": return cmdRegister(args.slice(1))
     case "publish": return cmdPublish(args.slice(1))
     case "remove": return cmdRemove(args.slice(1))
     case "list": return cmdList()
@@ -96,6 +97,34 @@ function askQuestion(question) {
   return new Promise(resolve => {
     rl.question(question, answer => { rl.close(); resolve(answer.trim()) })
   })
+}
+
+async function cmdRegister(registerArgs) {
+  const apiKey = getApiKey()
+  if (!apiKey) {
+    console.error("✗ Not logged in. Run `openbird login` first.")
+    process.exit(1)
+  }
+
+  let email = null, password = null
+  for (let i = 0; i < registerArgs.length; i++) {
+    if (registerArgs[i] === "--email" && i + 1 < registerArgs.length) email = registerArgs[++i]
+    else if (registerArgs[i] === "--password" && i + 1 < registerArgs.length) password = registerArgs[++i]
+  }
+
+  if (!email) {
+    console.error("✗ --email is required")
+    process.exit(1)
+  }
+
+  try {
+    const result = await registerUser({ email, password })
+    console.log(`✓ User registered: ${result.email}`)
+    console.log(`  API Key: ${result.apiKey}`)
+  } catch (e) {
+    console.error(`✗ Register failed: ${e.message}`)
+    process.exit(1)
+  }
 }
 
 function parsePublishArgs(fileArgs) {
@@ -308,6 +337,7 @@ function cmdHelp() {
 
 Usage:
   openbird login                          Authenticate with OpenBird
+  openbird register --email <email> [--password]  Register a new user (admin only)
   openbird publish <file.md>              Publish or update a document
   openbird publish --slug <slug> <file>   Update a specific document
   openbird publish --namespace <slug>     Publish to @username/slug namespace
