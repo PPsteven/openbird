@@ -289,7 +289,7 @@ export OPENBIRD_API_URL="https://openbird.your-subdomain.workers.dev"
 管理员可使用 `openbird register` 创建其他用户：
 
 ```bash
-openbird register --email user@example.com --password "password"
+openbird register --email user@example.com --password "password" [--username custom-name]
 ```
 
 ---

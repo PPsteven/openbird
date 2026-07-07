@@ -289,7 +289,7 @@ Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env` before deployment. The admin ac
 Admins can create additional users with `openbird register`:
 
 ```bash
-openbird register --email user@example.com --password "password"
+openbird register --email user@example.com --password "password" [--username custom-name]
 ```
 
 ---
