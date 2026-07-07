@@ -1,51 +1,51 @@
 # OpenBird
 
-一行命令将 Markdown 发布为可分享网页。
+Publish Markdown as shareable web pages with a single command.
 
-[JotBird](https://jotbird.com) 的开源替代，后端自托管在 Cloudflare 免费额度内。
+An open-source alternative to [JotBird](https://jotbird.com), self-hosted on Cloudflare's free tier.
 
 ---
 
-# 第一部分：使用指南
+# Part 1: User Guide
 
-## 特性
+## Features
 
-- 一行命令发布 Markdown 为美观网页，永久保留
-- 零配置临时发布（`--temp`，无需登录，1h 自动过期）
-- 本地图片自动上传
-- `username/slug` 命名空间永久 URL
-- 个人/小团队使用完全免费（Cloudflare Free Tier）
-- 零 npm 依赖
+- One command publishes Markdown to beautiful, permanent web pages
+- Zero-config temporary publishing (`--temp`, no login, auto-expires in 1h)
+- Local images auto-upload to cloud storage
+- `username/slug` namespace for permanent URLs
+- Completely free for personal/small team use (Cloudflare Free Tier)
+- Zero npm dependencies
 
-## 快速开始
+## Quick Start
 
-### 前置要求
+### Prerequisites
 
 - Node.js 18+
 
-### 1. 安装 CLI
+### 1. Install the CLI
 
 ```bash
 git clone https://github.com/PPsteven/openbird.git
 cd openbird/cli
 npm link
 
-# 验证安装
+# Verify installation
 openbird --version
 # → openbird v0.1.0
 ```
 
-### 2. 登录
+### 2. Login
 
 ```bash
 openbird login
 ```
 
-浏览器将打开登录页面，输入账号密码后获取 API Key 并自动保存。
+Your browser will open a login page. Enter your credentials to get an API key, which is saved automatically.
 
-> **没有账号？** 使用下面的演示账号，或自行部署后端（见第二部分）。
+> **No account?** Use the demo account below, or deploy your own backend (see Part 2).
 
-### 3. 发布第一篇文档
+### 3. Publish Your First Document
 
 ```bash
 echo "# Hello OpenBird" > hello.md
@@ -53,80 +53,80 @@ openbird publish hello.md
 # → ✨ Published → https://openbird.jhao.space/quiet-blue-lake
 ```
 
-浏览器打开输出的 URL 即可看到渲染后的页面。
+Open the URL in your browser to see the rendered page.
 
-> **不想登录？** 直接用 `--temp` 发布 1 小时临时页面：
+> **Don't want to log in?** Use `--temp` for a 1-hour temporary page:
 > ```bash
 > echo "# Quick Test" > /tmp/test.md
 > openbird publish --temp /tmp/test.md
 > # → ⚡ Published (temp, 1h) → https://openbird.jhao.space/warm-clear-seed
 > ```
 
-## 演示账号
+## Demo Account
 
-| 项 | 值 |
-|----|-----|
-| 用户名 | `demo` |
-| 密码 | `demo@123` |
-| 后端地址 | `https://openbird.jhao.space` |
+| Item | Value |
+|------|-------|
+| Username | `demo` |
+| Password | `demo@123` |
+| Backend URL | `https://openbird.jhao.space` |
 
-使用演示账号登录后即可体验完整功能。所有文档对所有人可见，请勿发布敏感内容。
+Log in with the demo account to try all features. All documents are publicly visible — do not publish sensitive content.
 
-## 命令参考
+## Command Reference
 
 ### openbird login
 
-登录 CLI。token 保存在 `~/.config/openbird/credentials`。
+Authenticate the CLI. The token is saved to `~/.config/openbird/credentials`.
 
 ```bash
 openbird login
 ```
 
-也可以通过环境变量提供 API Key（CI/CD 场景）：
+You can also provide the API key via environment variable (for CI/CD):
 ```bash
 export OPENBIRD_API_KEY="ob_xxx"
 ```
 
 ### openbird publish
 
-发布或更新 Markdown 文档。
+Publish or update a Markdown document.
 
 ```bash
-# 发布文件
+# Publish a file
 openbird publish my-doc.md
 
-# 自定义 URL slug
+# Custom URL slug
 openbird publish --slug my-custom-url my-doc.md
 
-# 发布到命名空间（永久 URL，需先设置 username，slug 自动分配）
+# Publish to namespace (permanent URL, slug auto-allocated)
 openbird publish --namespace my-doc.md
 
-# 命名空间 + 自定义 slug
+# Namespace + custom slug
 openbird publish --slug my-page --namespace my-doc.md
 
-# 临时发布（无需登录，1 小时自动过期）
+# Temporary publish (no login, auto-expires in 1 hour)
 openbird publish --temp my-doc.md
 
-# 从 stdin 发布
+# Publish from stdin
 cat my-doc.md | openbird publish
 
-# 支持的文件格式：.md .markdown .mdx .txt .text
+# Supported file formats: .md .markdown .mdx .txt .text
 openbird publish notes.txt
 ```
 
-| 参数 | 说明 |
-|------|------|
-| `--slug <value>` | 自定义 URL slug（如 `my-page`，3-60 字符，小写字母数字和连字符） |
-| `--namespace` | 发布到 `username/<slug>` 永久 URL，slug 自动分配或配合 `--slug` 指定 |
-| `--temp` | 临时发布，无需登录，1 小时后自动过期 |
+| Flag | Description |
+|------|-------------|
+| `--slug <value>` | Custom URL slug (e.g. `my-page`, 3-60 chars, lowercase alphanumeric and hyphens) |
+| `--namespace` | Publish to `username/<slug>` permanent URL, slug auto-allocated or specified with `--slug` |
+| `--temp` | Temporary publish, no login required, auto-expires in 1 hour |
 
-输出示例：
+Output:
 
 ```
 ✨ Published → https://openbird.jhao.space/my-custom-url
 ```
 
-更新已有文档：
+Updating an existing document:
 
 ```
 ✓ Updated → https://openbird.jhao.space/my-custom-url
@@ -134,13 +134,13 @@ openbird publish notes.txt
 
 ### openbird list
 
-列出当前用户的所有已发布文档。
+List all documents published by the current user.
 
 ```bash
 openbird list
 ```
 
-输出示例：
+Output:
 
 ```
   my-custom-url  My Document Title
@@ -150,55 +150,55 @@ openbird list
   2 documents
 ```
 
-命名空间文档显示为 `username/slug` 格式。
+Namespace documents are shown as `username/slug`.
 
 ### openbird remove
 
-删除已发布的文档。
+Delete a published document.
 
 ```bash
-# 通过文件名删除（从 .openbird 映射查找）
+# By filename (looks up from .openbird mapping)
 openbird remove my-doc.md
 
-# 通过 slug 直接删除
+# By slug directly
 openbird remove my-custom-url
 
-# 删除命名空间文档
+# Delete a namespaced document
 openbird remove --namespace my-page
 
-# 或直接传 username/slug
+# Or pass username/slug directly
 openbird remove ppsteven/my-page
 ```
 
-输出示例：
+Output:
 
 ```
 ✓ Removed my-custom-url
 ```
 
-## 配置参考
+## Configuration
 
-### 环境变量
+### Environment Variables
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `OPENBIRD_API_URL` | Worker API 地址 | `https://openbird.jhao.space`（公开服务） |
-| `OPENBIRD_API_KEY` | API Key（优先级高于 credentials 文件） | 无 |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENBIRD_API_URL` | Worker API URL | `https://openbird.jhao.space` (public instance) |
+| `OPENBIRD_API_KEY` | API Key (takes precedence over credentials file) | None |
 
-### 配置文件
+### Credentials File
 
-API Key 存储在 `~/.config/openbird/credentials`，权限 `0600`。`openbird login` 自动管理此文件。
+The API key is stored in `~/.config/openbird/credentials` with permissions `0600`. Managed automatically by `openbird login`.
 
 ```bash
-# 手动设置
+# Manual setup
 mkdir -p ~/.config/openbird
 echo "ob_your_api_key" > ~/.config/openbird/credentials
 chmod 600 ~/.config/openbird/credentials
 ```
 
-### 映射文件 .openbird
+### Mapping File (.openbird)
 
-发布文件时，CLI 会在当前目录创建 `.openbird` 文件，记录文件名与 URL slug 的映射：
+When you publish a file, the CLI creates a `.openbird` file in the current directory to track filename-to-slug mappings:
 
 ```
 # .openbird
@@ -206,16 +206,16 @@ my-doc.md = my-custom-url
 about.md = ppsteven/my-page
 ```
 
-后续重复 `openbird publish my-doc.md` 无需再指定 `--slug`，自动更新同一 URL。
+Subsequent `openbird publish my-doc.md` calls will automatically update the same URL without needing `--slug`.
 
 ---
 
-# 第二部分：自部署
+# Part 2: Self-Hosting
 
-## 前置要求
+## Prerequisites
 
 - Node.js 18+
-- Cloudflare 账户（[免费注册](https://dash.cloudflare.com/sign-up)）
+- Cloudflare account ([free sign-up](https://dash.cloudflare.com/sign-up))
 - [wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) 4.x+
 
 ```bash
@@ -223,70 +223,70 @@ npm install -g wrangler
 wrangler login
 ```
 
-## 1. 部署后端
+## 1. Deploy the Backend
 
-### 方式一：一键脚本（推荐）
+### Option 1: One-Click Script (Recommended)
 
 ```bash
 git clone https://github.com/PPsteven/openbird.git
 cd openbird/worker
 
-# 配置环境变量
+# Configure environment variables
 cp .env.example .env
-# 编辑 .env，设置你的域名：
-#   自定义域名:  OPENBIRD_DOMAIN=openbird.yourdomain.com
-#   workers.dev: OPENBIRD_DOMAIN=openbird.yoursubdomain.workers.dev
+# Edit .env, set your domain:
+#   Custom domain:  OPENBIRD_DOMAIN=openbird.yourdomain.com
+#   workers.dev:    OPENBIRD_DOMAIN=openbird.yoursubdomain.workers.dev
 
 chmod +x deploy.sh
 ./deploy.sh
 ```
 
-脚本会自动创建 KV namespaces、R2 buckets、生成 `wrangler.toml` 并执行部署。
+The script automatically creates KV namespaces, R2 buckets, generates `wrangler.toml`, and deploys.
 
-### 方式二：手动部署
+### Option 2: Manual Deployment
 
 ```bash
 git clone https://github.com/PPsteven/openbird.git
 cd openbird/worker
 
-# 创建 KV namespaces（记录输出的 id）
+# Create KV namespaces (note the output ids)
 wrangler kv namespace create USERS
 wrangler kv namespace create DOCS
 
-# 创建 R2 buckets
+# Create R2 buckets
 wrangler r2 bucket create openbird-pages
 wrangler r2 bucket create openbird-images
 
-# 编辑 wrangler.toml，填入上面的 KV namespace id
+# Edit wrangler.toml, fill in the KV namespace ids above
 # [[kv_namespaces]]
 # binding = "USERS"
-# id = "你输出的id"
+# id = "your-id"
 
-# 部署
+# Deploy
 wrangler deploy
 # → Deployed "openbird" → https://openbird.your-subdomain.workers.dev
 ```
 
 <details>
-<summary>可选：绑定自定义域名</summary>
+<summary>Optional: Bind a Custom Domain</summary>
 
-两种方式部署完成后，均可绑定自定义域名：
+After deployment, you can bind a custom domain:
 
 1. Cloudflare Dashboard → Workers & Pages → openbird → Settings → Domains & Routes
-2. 添加自定义域名（如 `openbird.yourdomain.com`）
+2. Add a custom domain (e.g. `openbird.yourdomain.com`)
 </details>
 
-## 2. 设置 CLI 指向自托管实例
+## 2. Point the CLI to Your Instance
 
 ```bash
 export OPENBIRD_API_URL="https://openbird.your-subdomain.workers.dev"
 ```
 
-## 3. 管理员账号
+## 3. Admin Account
 
-部署时在 `.env` 中设置 `ADMIN_EMAIL` 和 `ADMIN_PASSWORD`，首次请求时自动创建管理员账号。
+Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env` before deployment. The admin account is auto-created on the first request.
 
-管理员可使用 `openbird register` 创建其他用户：
+Admins can create additional users with `openbird register`:
 
 ```bash
 openbird register --email user@example.com --password "password"
@@ -294,53 +294,53 @@ openbird register --email user@example.com --password "password"
 
 ---
 
-# 架构
+# Architecture
 
-## 整体架构
+## Overview
 
 ```
 CLI → api.js → Worker /api/v1/*
                    ↓
-               KV (USERS + DOCS 索引)
+               KV (USERS + DOCS index)
                R2 (PAGES + IMAGES)
                    ↓
-Browser → Worker /:slug → R2 → HTML 响应
+Browser → Worker /:slug → R2 → HTML response
 ```
 
-单 Cloudflare Worker 承载全部功能：API + 页面展示 + 图片代理。
+A single Cloudflare Worker handles everything: API, page serving, and image proxy.
 
-## 数据存储
+## Data Storage
 
-| 存储 | 用途 | 免费额度 |
-|------|------|----------|
-| KV `USERS` | 用户账号、API Key 哈希、email 索引 | 1 GB |
-| KV `DOCS` | 文档元信息（slug、标题、过期时间等） | 1 GB |
-| R2 `PAGES` | 渲染后的 HTML 页面 | 10 GB |
-| R2 `IMAGES` | 用户上传的图片 | 10 GB |
+| Storage | Purpose | Free Tier |
+|---------|---------|-----------|
+| KV `USERS` | User accounts, API key hashes, email index | 1 GB |
+| KV `DOCS` | Document metadata (slug, title, expiry) | 1 GB |
+| R2 `PAGES` | Rendered HTML pages | 10 GB |
+| R2 `IMAGES` | User-uploaded images | 10 GB |
 
-## 页面渲染
+## Markdown Rendering
 
-Worker 内置零依赖 Markdown 渲染器，支持：
+The Worker has a built-in zero-dependency Markdown renderer supporting:
 
-- 标题（h1-h6）
-- 粗体、斜体、行内代码
-- 链接、图片
-- 无序列表、有序列表
-- 引用块、水平线
-- 表格
-- 代码块（fenced）
+- Headings (h1-h6)
+- Bold, italic, inline code
+- Links, images
+- Unordered and ordered lists
+- Blockquotes, horizontal rules
+- Tables
+- Fenced code blocks
 
-页面以完整 HTML 文档返回，内联 CSS 样式，可直接在浏览器中查看。
+Pages are returned as complete HTML documents with inline CSS, viewable directly in any browser.
 
 ---
 
-# API 文档
+# API Documentation
 
-所有 API 需要 `Authorization: Bearer ob_xxx` 请求头（guest publish 除外）。
+All API endpoints require `Authorization: Bearer ob_xxx` header (except guest publish).
 
 ## POST /api/v1/register
 
-注册已关闭。首个管理员账号在部署时通过 `ADMIN_EMAIL` / `ADMIN_PASSWORD` 环境变量自动创建。
+Registration is closed. The first admin account is auto-created via `ADMIN_EMAIL` / `ADMIN_PASSWORD` environment variables at deploy time.
 
 ```bash
 curl -X POST https://openbird.jhao.space/api/v1/register \
@@ -348,7 +348,7 @@ curl -X POST https://openbird.jhao.space/api/v1/register \
   -d '{"email":"user@example.com","password":"your-password"}'
 ```
 
-响应（403）：
+Response (403):
 ```json
 {
   "error": "Registration is closed"
@@ -357,7 +357,7 @@ curl -X POST https://openbird.jhao.space/api/v1/register \
 
 ## POST /api/v1/publish
 
-发布或更新文档。
+Publish or update a document.
 
 ```bash
 curl -X POST https://openbird.jhao.space/api/v1/publish \
@@ -366,14 +366,14 @@ curl -X POST https://openbird.jhao.space/api/v1/publish \
   -d '{"markdown":"# Hello\n\nWorld","slug":"my-page"}'
 ```
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `markdown` | string | 是 | Markdown 内容（最大 256KB） |
-| `slug` | string | 否 | 自定义 URL slug，不提供则自动生成 |
-| `namespaced` | boolean | 否 | 设为 `true` 发布到 `username/slug`（需先设置 username） |
-| `title` | string | 否 | 页面标题，不提供则从 markdown 首个 `# 标题` 提取 |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `markdown` | string | yes | Markdown content (max 256KB) |
+| `slug` | string | no | Custom URL slug, auto-generated if omitted |
+| `namespaced` | boolean | no | Set to `true` to publish to `username/slug` (requires username) |
+| `title` | string | no | Page title, extracted from first `# Title` if omitted |
 
-响应（201 新建 / 200 更新）：
+Response (201 created / 200 updated):
 ```json
 {
   "slug": "my-page",
@@ -384,9 +384,9 @@ curl -X POST https://openbird.jhao.space/api/v1/publish \
 }
 ```
 
-## POST /api/v1/publish（临时发布）
+## POST /api/v1/publish (Guest)
 
-无需认证，发布 1 小时临时页面。需显式传 `temp: true`。
+No authentication required. Publishes a 1-hour temporary page. Must pass `temp: true`.
 
 ```bash
 curl -X POST https://openbird.jhao.space/api/v1/publish \
@@ -394,14 +394,14 @@ curl -X POST https://openbird.jhao.space/api/v1/publish \
   -d '{"markdown":"# Hello Guest","temp":true}'
 ```
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `markdown` | string | 是 | Markdown 内容（最大 256KB） |
-| `temp` | boolean | 是 | 必须为 `true`，否则返回 401 |
-| `slug` | string | 否 | 自定义 slug，不提供则自动生成 |
-| `title` | string | 否 | 页面标题 |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `markdown` | string | yes | Markdown content (max 256KB) |
+| `temp` | boolean | yes | Must be `true`, otherwise returns 401 |
+| `slug` | string | no | Custom slug, auto-generated if omitted |
+| `title` | string | no | Page title |
 
-响应（201）：
+Response (201):
 ```json
 {
   "slug": "warm-clear-seed",
@@ -415,14 +415,14 @@ curl -X POST https://openbird.jhao.space/api/v1/publish \
 
 ## GET /api/v1/documents
 
-列出当前用户的所有文档。
+List all documents for the current user.
 
 ```bash
 curl https://openbird.jhao.space/api/v1/documents \
   -H "Authorization: Bearer ob_xxx"
 ```
 
-响应（200）：
+Response (200):
 ```json
 {
   "documents": [
@@ -439,30 +439,30 @@ curl https://openbird.jhao.space/api/v1/documents \
 }
 ```
 
-结果按 `updatedAt` 降序排列。命名空间文档 `username` 字段非 null。
+Results are sorted by `updatedAt` descending. Namespace documents have a non-null `username` field.
 
 ## DELETE /api/v1/documents
 
-删除文档。
+Delete a document.
 
 ```bash
-# 删除普通文档
+# Delete a regular document
 curl -X DELETE "https://openbird.jhao.space/api/v1/documents?slug=my-page" \
   -H "Authorization: Bearer ob_xxx"
 
-# 删除命名空间文档
+# Delete a namespaced document
 curl -X DELETE "https://openbird.jhao.space/api/v1/documents?slug=my-page&namespaced=true" \
   -H "Authorization: Bearer ob_xxx"
 ```
 
-响应（200）：
+Response (200):
 ```json
 { "ok": true }
 ```
 
 ## POST /api/v1/upload-image
 
-上传图片。
+Upload an image.
 
 ```bash
 curl -X POST https://openbird.jhao.space/api/v1/upload-image \
@@ -470,9 +470,9 @@ curl -X POST https://openbird.jhao.space/api/v1/upload-image \
   -F "file=@photo.png"
 ```
 
-支持格式：png, jpeg, gif, webp, svg。最大 10 MB。
+Supported formats: png, jpeg, gif, webp, svg. Max 10 MB.
 
-响应（200）：
+Response (200):
 ```json
 {
   "url": "https://openbird.jhao.space/images/user_abc123/a1b2c3d4.png"
@@ -481,41 +481,41 @@ curl -X POST https://openbird.jhao.space/api/v1/upload-image \
 
 ## GET /:slug
 
-访问已发布的页面。
+View a published page.
 
 ```bash
 curl https://openbird.jhao.space/my-page
-# → HTML 文档
+# → HTML document
 ```
 
-## GET /@:username/:slug
+## GET /:username/:slug
 
-访问命名空间页面。
+View a namespaced page.
 
 ```bash
 curl https://openbird.jhao.space/ppsteven/my-page
-# → HTML 文档
+# → HTML document
 ```
 
 ---
 
-# 开发
+# Development
 
-## 本地开发
+## Local Development
 
 ```bash
-# 启动本地 Worker（含 KV + R2 模拟）
+# Start local Worker (with KV + R2 simulation)
 cd worker
 wrangler dev
 # → Ready on http://localhost:8787
 
-# 在另一个终端测试
+# In another terminal, test
 curl -X POST http://localhost:8787/api/v1/register \
   -H "Content-Type: application/json" \
   -d '{"email":"test@test.com","password":"123456"}'
 ```
 
-CLI 开发时指向本地 Worker：
+Point the CLI to your local Worker:
 
 ```bash
 cd cli
@@ -523,49 +523,50 @@ export OPENBIRD_API_URL="http://localhost:8787"
 node src/cli.js publish test.md
 ```
 
-## 项目结构
+## Project Structure
 
 ```
 pagebird/
-├── AGENTS.md                 # AI Agent 规则与约定
-├── README.md                 # 项目文档
-├── docs/                     # 设计文档
-│   ├── D0-reference.md       # JotBird 逆向参考
-│   ├── D1-worker-core.md     # Worker 后端 Spec
-│   ├── D2-cli-core.md        # CLI 核心 Spec
-│   ├── D3-images.md          # 图片上传 Spec
-│   ├── D4-namespace.md       # 命名空间 Spec
-│   ├── D5-deployment.md      # 部署验证 Spec
-│   ├── D6-documentation.md   # 文档完善 Spec
-│   ├── architecture.md       # 架构与决策
-│   ├── status.md             # 进度跟踪
-│   └── troubleshoot.md       # 踩坑记录
+├── AGENTS.md                 # AI Agent rules & conventions
+├── README.md                 # Project documentation (English)
+├── README.zh.md              # Project documentation (Chinese)
+├── docs/                     # Design documents
+│   ├── D0-reference.md       # JotBird reverse engineering reference
+│   ├── D1-worker-core.md     # Worker backend spec
+│   ├── D2-cli-core.md        # CLI core spec
+│   ├── D3-images.md          # Image upload spec
+│   ├── D4-namespace.md       # Namespace spec
+│   ├── D5-deployment.md      # Deployment verification spec
+│   ├── D6-documentation.md   # Documentation spec
+│   ├── architecture.md       # Architecture & decisions
+│   ├── status.md             # Progress tracking
+│   └── troubleshoot.md       # Troubleshooting guide
 ├── worker/                   # Cloudflare Worker
-│   ├── src/index.js          # Worker 主程序
-│   ├── wrangler.toml         # Worker 配置
+│   ├── src/index.js          # Worker main program
+│   ├── wrangler.toml         # Worker configuration
 │   └── package.json
-└── cli/                      # CLI 工具
+└── cli/                      # CLI tool
     ├── src/
-    │   ├── cli.js            # 命令行入口
-    │   ├── api.js            # API 客户端
-    │   ├── config.js         # 配置管理
-    │   ├── files.js          # 文件类型校验
-    │   ├── images.js         # 图片上传与重写
-    │   ├── login.js          # 登录流程
-    │   └── mapping.js        # .openbird 映射管理
+    │   ├── cli.js            # CLI entry point
+    │   ├── api.js            # API client
+    │   ├── config.js         # Configuration management
+    │   ├── files.js          # File type validation
+    │   ├── images.js         # Image upload & rewriting
+    │   ├── login.js          # Login flow
+    │   └── mapping.js        # .openbird mapping management
     └── package.json
 ```
 
-## 技术栈
+## Tech Stack
 
-| 层 | 技术 |
-|----|------|
-| CLI | Node.js 18+ ESM，零依赖 |
+| Layer | Technology |
+|-------|-----------|
+| CLI | Node.js 18+ ESM, zero dependencies |
 | Worker | Cloudflare Workers (V8 isolate) |
-| 页面存储 | Cloudflare R2 |
-| 索引存储 | Cloudflare KV |
-| 图片存储 | Cloudflare R2 |
-| 部署 | wrangler CLI |
+| Page Storage | Cloudflare R2 |
+| Index Storage | Cloudflare KV |
+| Image Storage | Cloudflare R2 |
+| Deployment | wrangler CLI |
 
 ---
 
