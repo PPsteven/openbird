@@ -684,19 +684,32 @@ async function handlePublish(request, env) {
   }
 
   if (namespaced) {
-    if (!slugParam) {
-      return json({ error: "--namespace requires a slug" }, 400)
-    }
     if (!auth.user.username) {
       return json({ error: "Username required for namespaced publishing" }, 403)
     }
-    if (!/^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/.test(slugParam)) {
-      return json({ error: "Invalid slug format" }, 400)
-    }
 
-    const kvKey = `ns:${auth.user.username}/${slugParam}`
-    const existing = await env.DOCS.get(kvKey)
-    const isNew = !existing
+    let nsSlug = slugParam
+    let isNew = true
+
+    if (nsSlug) {
+      if (!/^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/.test(nsSlug)) {
+        return json({ error: "Invalid slug format" }, 400)
+      }
+      const kvKey = `ns:${auth.user.username}/${nsSlug}`
+      const existing = await env.DOCS.get(kvKey)
+      if (existing) {
+        const doc = JSON.parse(existing)
+        if (doc.userId !== auth.userId) {
+          return json({ error: "Document not owned by user" }, 403)
+        }
+        isNew = false
+      }
+    } else {
+      nsSlug = await allocateSlug(env)
+      if (!nsSlug) {
+        return json({ error: "Failed to allocate document slug" }, 503)
+      }
+    }
 
     const title = titleParam || extractTitle(markdown) || "Untitled"
     const html = renderMarkdown(markdown)
@@ -707,21 +720,22 @@ async function handlePublish(request, env) {
     }
 
     const now = new Date().toISOString()
-    const r2Key = `pages/@${auth.user.username}/${slugParam}/index.html`
+    const r2Key = `pages/@${auth.user.username}/${nsSlug}/index.html`
     await env.PAGES.put(r2Key, html, {
       httpMetadata: { contentType: "text/html" },
-      customMetadata: { userId: auth.userId, title, slug: slugParam, username: auth.user.username, createdAt: now, updatedAt: now }
+      customMetadata: { userId: auth.userId, title, slug: nsSlug, username: auth.user.username, createdAt: now, updatedAt: now }
     })
 
-    const meta = { slug: slugParam, title, userId: auth.userId, username: auth.user.username, source: "api", createdAt: now, updatedAt: now }
+    const kvKey = `ns:${auth.user.username}/${nsSlug}`
+    const meta = { slug: nsSlug, title, userId: auth.userId, username: auth.user.username, source: "api", createdAt: now, updatedAt: now }
     await env.DOCS.put(kvKey, JSON.stringify(meta))
-    await env.DOCS.put(`user:${auth.userId}:docs:@${auth.user.username}/${slugParam}`, "1")
+    await env.DOCS.put(`user:${auth.userId}:docs:@${auth.user.username}/${nsSlug}`, "1")
 
     const baseUrl = getBaseUrl(request)
     return json({
-      slug: slugParam,
+      slug: nsSlug,
       username: auth.user.username,
-      url: `${baseUrl}/@${auth.user.username}/${slugParam}`,
+      url: `${baseUrl}/@${auth.user.username}/${nsSlug}`,
       title,
       expiresAt: null,
       ttlDays: null,
@@ -761,17 +775,16 @@ async function handlePublish(request, env) {
   }
 
   const now = new Date().toISOString()
-  const expiresAt = new Date(Date.now() + 90 * 86400000).toISOString()
 
   const htmlKey = `pages/${slug}/index.html`
   await env.PAGES.put(htmlKey, html, {
     httpMetadata: { contentType: "text/html" },
-    customMetadata: { userId: auth.userId, title, slug, createdAt: now, updatedAt: now, expiresAt }
+    customMetadata: { userId: auth.userId, title, slug, createdAt: now, updatedAt: now }
   })
 
-  const meta = { slug, title, userId: auth.userId, source: "api", createdAt: now, updatedAt: now, expiresAt, ttlDays: 90 }
-  await env.DOCS.put("doc:" + slug, JSON.stringify(meta), { expirationTtl: 90 * 86400 })
-  await env.DOCS.put("user:" + auth.userId + ":docs:" + slug, "1", { expirationTtl: 90 * 86400 })
+  const meta = { slug, title, userId: auth.userId, source: "api", createdAt: now, updatedAt: now }
+  await env.DOCS.put("doc:" + slug, JSON.stringify(meta))
+  await env.DOCS.put("user:" + auth.userId + ":docs:" + slug, "1")
 
   const baseUrl = getBaseUrl(request)
 
@@ -780,8 +793,8 @@ async function handlePublish(request, env) {
     username: null,
     url: `${baseUrl}/${slug}`,
     title,
-    expiresAt,
-    ttlDays: 90,
+    expiresAt: null,
+    ttlDays: null,
     created: isNew
   }, isNew ? 201 : 200)
 }

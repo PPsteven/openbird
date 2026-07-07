@@ -132,7 +132,7 @@ function parsePublishArgs(fileArgs) {
   const files = []
   for (let i = 0; i < fileArgs.length; i++) {
     if (fileArgs[i] === "--slug" && i + 1 < fileArgs.length) { slug = fileArgs[++i] }
-    else if (fileArgs[i] === "--namespace" && i + 1 < fileArgs.length) { slug = fileArgs[++i]; namespaced = true }
+    else if (fileArgs[i] === "--namespace") { namespaced = true }
     else if (fileArgs[i] === "--temp") { temp = true }
     else files.push(fileArgs[i])
   }
@@ -339,8 +339,9 @@ Usage:
   openbird login                          Authenticate with OpenBird
   openbird register --email <email> [--password]  Register a new user (admin only)
   openbird publish <file.md>              Publish or update a document
-  openbird publish --slug <slug> <file>   Update a specific document
-  openbird publish --namespace <slug>     Publish to @username/slug namespace
+  openbird publish --slug <slug> <file>   Publish with a custom slug
+  openbird publish --namespace <file>     Publish to @username/slug namespace (auto-allocates slug)
+  openbird publish --slug <slug> --namespace <file>  Publish to @username/slug with custom slug
   openbird publish --temp <file.md>       Publish a temporary page (1h, no login)
   openbird publish                        Read from stdin
   openbird remove <file.md|slug>          Delete a document
