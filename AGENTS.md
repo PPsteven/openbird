@@ -24,6 +24,7 @@ docs/
 ├── D4-namespace.md      # Spec 4: @username/slug
 ├── D10-publish-redesign.md  # Spec 10: 永久发布 + --slug/--namespace
 ├── D11-auto-username.md     # Spec 11: 自动派生 Username
+├── D12-username-conflict.md # Spec 12: Username 冲突检测
 ├── architecture.md      # 项目基础、技术决策、开发环境
 └── status.md            # 进度跟踪、当前焦点、踩坑记录
 ```
@@ -92,6 +93,7 @@ flowchart TD
 | 9 | [docs/D9-admin-register.md](docs/D9-admin-register.md) | Admin 创建用户 | `openbird register --email` |
 | 10 | [docs/D10-publish-redesign.md](docs/D10-publish-redesign.md) | 永久发布 + --slug/--namespace | wrangler deploy + curl 验证 |
 | 11 | [docs/D11-auto-username.md](docs/D11-auto-username.md) | 自动派生 Username | 注册后直接 publish --namespace |
+| 12 | [docs/D12-username-conflict.md](docs/D12-username-conflict.md) | Username 冲突检测 | 注册冲突 username 返回 409 |
 
 ## 约定
 
@@ -123,6 +125,7 @@ pagebird/
 │   ├── D9-admin-register.md
 │   ├── D10-publish-redesign.md
 │   ├── D11-auto-username.md
+│   ├── D12-username-conflict.md
 │   ├── architecture.md
 │   └── status.md
 ├── worker/

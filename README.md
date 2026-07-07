@@ -13,7 +13,7 @@
 - 一行命令发布 Markdown 为美观网页，永久保留
 - 零配置临时发布（`--temp`，无需登录，1h 自动过期）
 - 本地图片自动上传
-- `@username/slug` 命名空间永久 URL
+- `username/slug` 命名空间永久 URL
 - 个人/小团队使用完全免费（Cloudflare Free Tier）
 - 零 npm 依赖
 
@@ -117,7 +117,7 @@ openbird publish notes.txt
 | 参数 | 说明 |
 |------|------|
 | `--slug <value>` | 自定义 URL slug（如 `my-page`，3-60 字符，小写字母数字和连字符） |
-| `--namespace` | 发布到 `@username/<slug>` 永久 URL，slug 自动分配或配合 `--slug` 指定 |
+| `--namespace` | 发布到 `username/<slug>` 永久 URL，slug 自动分配或配合 `--slug` 指定 |
 | `--temp` | 临时发布，无需登录，1 小时后自动过期 |
 
 输出示例：
@@ -145,12 +145,12 @@ openbird list
 ```
   my-custom-url  My Document Title
     https://openbird.jhao.space/my-custom-url
-  @ppsteven/my-page  My Page
-    https://openbird.jhao.space/@ppsteven/my-page
+  ppsteven/my-page  My Page
+    https://openbird.jhao.space/ppsteven/my-page
   2 documents
 ```
 
-命名空间文档显示为 `@username/slug` 格式。
+命名空间文档显示为 `username/slug` 格式。
 
 ### openbird remove
 
@@ -166,8 +166,8 @@ openbird remove my-custom-url
 # 删除命名空间文档
 openbird remove --namespace my-page
 
-# 或直接传 @username/slug
-openbird remove @ppsteven/my-page
+# 或直接传 username/slug
+openbird remove ppsteven/my-page
 ```
 
 输出示例：
@@ -203,7 +203,7 @@ chmod 600 ~/.config/openbird/credentials
 ```
 # .openbird
 my-doc.md = my-custom-url
-about.md = @ppsteven/my-page
+about.md = ppsteven/my-page
 ```
 
 后续重复 `openbird publish my-doc.md` 无需再指定 `--slug`，自动更新同一 URL。
@@ -370,7 +370,7 @@ curl -X POST https://openbird.jhao.space/api/v1/publish \
 |------|------|------|------|
 | `markdown` | string | 是 | Markdown 内容（最大 256KB） |
 | `slug` | string | 否 | 自定义 URL slug，不提供则自动生成 |
-| `namespaced` | boolean | 否 | 设为 `true` 发布到 `@username/slug`（需先设置 username） |
+| `namespaced` | boolean | 否 | 设为 `true` 发布到 `username/slug`（需先设置 username） |
 | `title` | string | 否 | 页面标题，不提供则从 markdown 首个 `# 标题` 提取 |
 
 响应（201 新建 / 200 更新）：
@@ -493,7 +493,7 @@ curl https://openbird.jhao.space/my-page
 访问命名空间页面。
 
 ```bash
-curl https://openbird.jhao.space/@ppsteven/my-page
+curl https://openbird.jhao.space/ppsteven/my-page
 # → HTML 文档
 ```
 

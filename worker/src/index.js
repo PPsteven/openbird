@@ -232,7 +232,7 @@ pre code{background:none; padding:0; border-radius:0; font-size:inherit;}
             <div class="card">
               <div class="card-icon">@</div>
               <h3>Memorable URLs</h3>
-              <p>Random slugs out of the box, or <code>@username/slug</code> namespace for permanent links.</p>
+              <p>Random slugs out of the box, or <code>username/slug</code> namespace for permanent links.</p>
             </div>
           </div>
         </div>
@@ -288,7 +288,7 @@ openbird publish --temp hello.md
 
 <span class="c-muted"># Namespace permanent URL</span>
 openbird publish --namespace my-post hello.md
-<span class="c-accent">✨ Published → https://openbird.jhao.space/@ppsteven/my-post</span></code></pre>
+<span class="c-accent">✨ Published → https://openbird.jhao.space/ppsteven/my-post</span></code></pre>
           </div>
         </div>
       </section>
@@ -598,8 +598,11 @@ export default {
 
 
     if (path.startsWith("/images/")) return serveImage(path, env)
-    if (path.startsWith("/@")) return serveNamespacedPage(path, env)
-    if (path.startsWith("/") && path.length > 1) return servePage(path.slice(1), env)
+    if (path.startsWith("/") && path.length > 1) {
+      const segments = path.slice(1).split("/")
+      if (segments.length === 2) return serveNamespacedPage(segments[0], segments[1], env)
+      return servePage(segments[0], env)
+    }
 
     return new Response("Not Found", { status: 404 })
   }
@@ -732,7 +735,7 @@ async function handlePublish(request, env) {
     }
 
     const now = new Date().toISOString()
-    const r2Key = `pages/@${auth.user.username}/${nsSlug}/index.html`
+    const r2Key = `pages/${auth.user.username}/${nsSlug}/index.html`
     await env.PAGES.put(r2Key, html, {
       httpMetadata: { contentType: "text/html" },
       customMetadata: { userId: auth.userId, title, slug: nsSlug, username: auth.user.username, createdAt: now, updatedAt: now }
@@ -741,13 +744,13 @@ async function handlePublish(request, env) {
     const kvKey = `ns:${auth.user.username}/${nsSlug}`
     const meta = { slug: nsSlug, title, userId: auth.userId, username: auth.user.username, source: "api", createdAt: now, updatedAt: now }
     await env.DOCS.put(kvKey, JSON.stringify(meta))
-    await env.DOCS.put(`user:${auth.userId}:docs:@${auth.user.username}/${nsSlug}`, "1")
+    await env.DOCS.put(`user:${auth.userId}:docs:${auth.user.username}/${nsSlug}`, "1")
 
     const baseUrl = getBaseUrl(request)
     return json({
       slug: nsSlug,
       username: auth.user.username,
-      url: `${baseUrl}/@${auth.user.username}/${nsSlug}`,
+      url: `${baseUrl}/${auth.user.username}/${nsSlug}`,
       title,
       expiresAt: null,
       ttlDays: null,
@@ -901,8 +904,8 @@ async function handleList(request, env) {
   const docs = []
   for (const key of result.keys) {
     const suffix = key.name.slice(prefix.length)
-    if (suffix.startsWith("@")) {
-      const docData = await env.DOCS.get("ns:" + suffix.slice(1))
+    if (suffix.includes("/")) {
+      const docData = await env.DOCS.get("ns:" + suffix)
       if (!docData) continue
       const doc = JSON.parse(docData)
       const baseUrl = getBaseUrl(request)
@@ -910,7 +913,7 @@ async function handleList(request, env) {
         slug: doc.slug,
         username: doc.username,
         title: doc.title,
-        url: `${baseUrl}/@${doc.username}/${doc.slug}`,
+        url: `${baseUrl}/${doc.username}/${doc.slug}`,
         source: doc.source,
         updatedAt: doc.updatedAt,
         expiresAt: null
@@ -962,9 +965,9 @@ async function handleRemove(request, env) {
     if (doc.userId !== auth.userId) {
       return json({ error: "Document not owned by user" }, 403)
     }
-    await env.PAGES.delete(`pages/@${auth.user.username}/${slug}/index.html`)
+    await env.PAGES.delete(`pages/${auth.user.username}/${slug}/index.html`)
     await env.DOCS.delete(kvKey)
-    await env.DOCS.delete(`user:${auth.userId}:docs:@${auth.user.username}/${slug}`)
+    await env.DOCS.delete(`user:${auth.userId}:docs:${auth.user.username}/${slug}`)
     return json({ ok: true })
   }
 
@@ -1166,11 +1169,8 @@ async function serveImage(path, env) {
   })
 }
 
-async function serveNamespacedPage(path, env) {
-  const match = path.match(/^\/@([^/]+)\/(.+)$/)
-  if (!match) return new Response("Not Found", { status: 404 })
-  const [, username, slug] = match
-  const obj = await env.PAGES.get(`pages/@${username}/${slug}/index.html`)
+async function serveNamespacedPage(username, slug, env) {
+  const obj = await env.PAGES.get(`pages/${username}/${slug}/index.html`)
   if (!obj) return new Response("Not Found", { status: 404 })
   return new Response(obj.body, {
     headers: { "Content-Type": "text/html", "Cache-Control": "public, max-age=3600" }

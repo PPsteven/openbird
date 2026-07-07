@@ -141,7 +141,7 @@ function parsePublishArgs(fileArgs) {
 }
 
 function parseSlugValue(value) {
-  if (value.startsWith("@") && value.includes("/")) {
+  if (value.includes("/")) {
     const slash = value.indexOf("/")
     return { slug: value.slice(slash + 1), namespaced: true }
   }
@@ -210,7 +210,7 @@ async function cmdPublish(publishArgs) {
   try {
     const result = await publish({ markdown, slug, namespaced: isNamespaced })
     if (filename) {
-      const mappingValue = result.username ? `@${result.username}/${result.slug}` : result.slug
+      const mappingValue = result.username ? `${result.username}/${result.slug}` : result.slug
       setMapping(filename, mappingValue)
     }
     if (result.created) {
@@ -306,12 +306,10 @@ async function cmdRemove(removeArgs) {
     if (s === target) { slug = s; break }
   }
 
-  if (target.startsWith("@")) {
+  if (target.includes("/")) {
     const slash = target.indexOf("/")
-    if (slash !== -1) {
-      slug = target.slice(slash + 1)
-      namespaced = true
-    }
+    slug = target.slice(slash + 1)
+    namespaced = true
   }
 
   if (!namespaced) {
@@ -341,8 +339,8 @@ Usage:
   openbird register --email <email> [--password] [--username]  Register a new user (admin only)
   openbird publish <file.md>              Publish or update a document
   openbird publish --slug <slug> <file>   Publish with a custom slug
-  openbird publish --namespace <file>     Publish to @username/slug namespace (auto-allocates slug)
-  openbird publish --slug <slug> --namespace <file>  Publish to @username/slug with custom slug
+  openbird publish --namespace <file>     Publish to username/slug namespace (auto-allocates slug)
+  openbird publish --slug <slug> --namespace <file>  Publish to username/slug with custom slug
   openbird publish --temp <file.md>       Publish a temporary page (1h, no login)
   openbird publish                        Read from stdin
   openbird remove <file.md|slug>          Delete a document
