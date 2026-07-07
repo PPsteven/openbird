@@ -657,7 +657,7 @@ async function handleRegister(request, env) {
   await env.USERS.put("apikey:" + keyHash, JSON.stringify({ userId, createdAt: now }))
   await env.USERS.put("username:" + username, userId)
 
-  return json({ userId, apiKey, email }, 201)
+  return json({ userId, apiKey, email, username }, 201)
 }
 
 async function verifyAuth(request, env) {

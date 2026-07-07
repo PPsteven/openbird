@@ -340,15 +340,32 @@ Worker 内置零依赖 Markdown 渲染器，支持：
 
 ## POST /api/v1/register
 
-注册已关闭。首个管理员账号在部署时通过 `ADMIN_EMAIL` / `ADMIN_PASSWORD` 环境变量自动创建。
+仅管理员可用。创建新用户账号。需要管理员的 API Key。
 
 ```bash
 curl -X POST https://openbird.jhao.space/api/v1/register \
+  -H "Authorization: Bearer ob_admin_api_key" \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"your-password"}'
+  -d '{"email":"user@example.com","password":"your-password","username":"optional-username"}'
 ```
 
-响应（403）：
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `email` | string | 是 | 用户邮箱 |
+| `password` | string | 否 | 不传则自动生成随机密码 |
+| `username` | string | 否 | 自定义用户名，不传则默认使用邮箱 @ 前部分 |
+
+响应（201）：
+```json
+{
+  "userId": "user_a1b2c3d4e5f6",
+  "apiKey": "ob_xxx...",
+  "email": "user@example.com",
+  "username": "optional-username"
+}
+```
+
+非管理员调用返回：
 ```json
 {
   "error": "Registration is closed"

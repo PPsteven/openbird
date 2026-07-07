@@ -340,15 +340,32 @@ All API endpoints require `Authorization: Bearer ob_xxx` header (except guest pu
 
 ## POST /api/v1/register
 
-Registration is closed. The first admin account is auto-created via `ADMIN_EMAIL` / `ADMIN_PASSWORD` environment variables at deploy time.
+Admin only. Creates a new user account. Requires the admin's API key.
 
 ```bash
 curl -X POST https://openbird.jhao.space/api/v1/register \
+  -H "Authorization: Bearer ob_admin_api_key" \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"your-password"}'
+  -d '{"email":"user@example.com","password":"your-password","username":"optional-username"}'
 ```
 
-Response (403):
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `email` | string | yes | User email address |
+| `password` | string | no | Auto-generated random password if omitted |
+| `username` | string | no | Custom username, defaults to email local-part if omitted |
+
+Response (201):
+```json
+{
+  "userId": "user_a1b2c3d4e5f6",
+  "apiKey": "ob_xxx...",
+  "email": "user@example.com",
+  "username": "optional-username"
+}
+```
+
+Non-admin callers receive:
 ```json
 {
   "error": "Registration is closed"
