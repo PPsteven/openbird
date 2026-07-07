@@ -180,3 +180,11 @@ rm -rf worker/.wrangler/state
 ### --namespace 改为 boolean 后 CLI 行为变更
 
 `--namespace` 不再接受参数值。旧用法 `--namespace my-slug` 需改为 `--slug my-slug --namespace`。Worker 端 namespaced 路径已支持无 slug 时自动分配随机 slug。
+
+---
+
+## D12: Username 冲突检测
+
+### Spec 验证脚本中 alice2@example.com 不会派生 alice
+
+D12 spec 的验证标准 1b 预期 `alice2@example.com` 自动派生 `alice` 从而与 1a 的 `alice@example.com` 冲突。实际上 `alice2@example.com` 派生 `alice2`，不会冲突。正确测试冲突的方式是显式指定 `--username alice` 或使用不同 email 前缀的用户。
