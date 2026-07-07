@@ -4,7 +4,7 @@
 
 ## 当前焦点
 
-D11: 自动派生 Username — 创建用户时自动从 email 派生 username，消除手动 `PUT /api/v1/account` 步骤。
+所有 Spec 已完成。项目进入维护阶段。
 
 ## 进度
 
@@ -23,7 +23,7 @@ D11: 自动派生 Username — 创建用户时自动从 email 派生 username，
 - [x] D8: Worker 落地页服务 — 内联 site/ 到 Worker 源码，`GET /` 返回 index.html
 - [x] D9: Admin Register — 仅 admin 可通过 CLI 创建新用户
 - [x] D10: Publish Redesign — 默认 publish 永久化 + `--namespace` 拆分为 `--slug` + `--namespace`
-- [ ] D11: 自动派生 Username — 创建用户时自动从 email 派生 username
+- [x] D11: 自动派生 Username — 创建用户时自动从 email 派生 username
 
 ## 已知问题
 
@@ -50,6 +50,5 @@ D11: 自动派生 Username — 创建用户时自动从 email 派生 username，
 
 - 在可访问 Cloudflare Workers 的网络环境中完成远程冒烟测试
 - 绑定自定义域名（openbird.example.com）
-- Worker 端 login 页面实现（配合 CLI callback server）
 - CI/CD 自动化部署
 - 推送 main 后，在仓库 Settings → Pages → Source 选择 GitHub Actions，curl 验证 200

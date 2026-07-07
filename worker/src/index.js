@@ -541,8 +541,9 @@ async function seedAdminUser(env) {
     const keyHash = await sha256(apiKey)
     const now = new Date().toISOString()
 
+    const username = adminEmail.split('@')[0]
     await env.USERS.put("user:" + userId, JSON.stringify({
-      id: userId, email: adminEmail, passwordHash,
+      id: userId, email: adminEmail, username, passwordHash,
       keys: [{ prefix: apiKey.slice(0, 7), hash: keyHash, createdAt: now }],
       createdAt: now
     }))
@@ -633,9 +634,10 @@ async function handleRegister(request, env) {
   const passwordHash = await sha256(actualPassword)
   const keyHash = await sha256(apiKey)
   const now = new Date().toISOString()
+  const username = email.split('@')[0]
 
   await env.USERS.put("user:" + userId, JSON.stringify({
-    id: userId, email, passwordHash,
+    id: userId, email, username, passwordHash,
     keys: [{ prefix: apiKey.slice(0, 7), hash: keyHash, createdAt: now }],
     createdAt: now
   }))
@@ -1007,7 +1009,7 @@ button:hover{background:#0256b9}
 <button type="submit">Get API Key</button>
 <div class="error" id="error"></div>
 </form>
-<div class="hint">Don't have an account? Use <code>curl</code> to register first.</div>
+<div class="hint">Don't have an account? Ask your admin to create one.</div>
 <script>
 const callback = ${JSON.stringify(callback)}
 document.getElementById("loginForm").addEventListener("submit", async e => {
@@ -1016,7 +1018,7 @@ document.getElementById("loginForm").addEventListener("submit", async e => {
   const password = document.getElementById("password").value
   const errorEl = document.getElementById("error")
   try {
-    const resp = await fetch("/api/v1/register", {
+    const resp = await fetch("/api/v1/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password })
