@@ -4,85 +4,29 @@
 
 [JotBird](https://jotbird.com) 的开源替代，后端自托管在 Cloudflare 免费额度内。
 
+---
+
+# 第一部分：使用指南
+
 ## 特性
 
-- 一行命令发布 Markdown 为美观网页
+- 一行命令发布 Markdown 为美观网页，永久保留
 - 零配置临时发布（`--temp`，无需登录，1h 自动过期）
 - 本地图片自动上传
-- `@username/slug` 永久 URL
+- `@username/slug` 命名空间永久 URL
 - 个人/小团队使用完全免费（Cloudflare Free Tier）
 - 零 npm 依赖
-- 单次 `wrangler deploy` 部署全部后端
 
 ## 快速开始
 
 ### 前置要求
 
 - Node.js 18+
-- Cloudflare 账户（[免费注册](https://dash.cloudflare.com/sign-up)）
-- [wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) 4.x+
 
-```bash
-npm install -g wrangler
-wrangler login
-```
-
-### 1. 部署后端
-
-#### 方式一：一键脚本（推荐）
+### 1. 安装 CLI
 
 ```bash
 git clone https://github.com/PPsteven/openbird.git
-cd openbird/worker
-
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env，设置你的域名：
-#   自定义域名:  OPENBIRD_DOMAIN=openbird.yourdomain.com
-#   workers.dev: OPENBIRD_DOMAIN=openbird.yoursubdomain.workers.dev
-
-chmod +x deploy.sh
-./deploy.sh
-```
-
-脚本会自动创建 KV namespaces、R2 buckets、生成 `wrangler.toml` 并执行部署。
-
-#### 方式二：手动部署
-
-```bash
-git clone https://github.com/PPsteven/openbird.git
-cd openbird/worker
-
-# 创建 KV namespaces（记录输出的 id）
-wrangler kv namespace create USERS
-wrangler kv namespace create DOCS
-
-# 创建 R2 buckets
-wrangler r2 bucket create openbird-pages
-wrangler r2 bucket create openbird-images
-
-# 编辑 wrangler.toml，填入上面的 KV namespace id
-# [[kv_namespaces]]
-# binding = "USERS"
-# id = "你输出的id"
-
-# 部署
-wrangler deploy
-# → Deployed "openbird" → https://openbird.your-subdomain.workers.dev
-```
-
-<details>
-<summary>可选：绑定自定义域名</summary>
-
-两种方式部署完成后，均可绑定自定义域名：
-
-1. Cloudflare Dashboard → Workers & Pages → openbird → Settings → Domains & Routes
-2. 添加自定义域名（如 `openbird.yourdomain.com`）
-</details>
-
-### 2. 安装 CLI
-
-```bash
 cd openbird/cli
 npm link
 
@@ -91,35 +35,17 @@ openbird --version
 # → openbird v0.1.0
 ```
 
-### 3. 设置 API 地址（可选）
-
-默认使用公开服务 `https://openbird.jhao.space`，无需额外配置。如需自托管，指向你的 Worker 地址：
-
-```bash
-export OPENBIRD_API_URL="https://openbird.your-subdomain.workers.dev"
-```
-
-### 4. 登录
+### 2. 登录
 
 ```bash
 openbird login
 ```
 
-浏览器将打开登录页面，完成授权后 token 自动保存到 `~/.config/openbird/credentials`。
+浏览器将打开登录页面，输入账号密码后获取 API Key 并自动保存。
 
-如果浏览器不可用，也可以手动粘贴 API Key（`ob_` 开头）：
-```bash
-export OPENBIRD_API_KEY="ob_your_api_key_here"
-```
+> **没有账号？** 使用下面的演示账号，或自行部署后端（见第二部分）。
 
-> **零配置临时发布**：不想登录？直接用 `--temp` 发布 1 小时临时页面：
-> ```bash
-> echo "# Quick Test" > /tmp/test.md
-> openbird publish --temp /tmp/test.md
-> # → ⚡ Published (temp, 1h) → https://openbird.jhao.space/warm-clear-seed
-> ```
-
-### 5. 发布第一篇文档
+### 3. 发布第一篇文档
 
 ```bash
 echo "# Hello OpenBird" > hello.md
@@ -129,11 +55,28 @@ openbird publish hello.md
 
 浏览器打开输出的 URL 即可看到渲染后的页面。
 
+> **不想登录？** 直接用 `--temp` 发布 1 小时临时页面：
+> ```bash
+> echo "# Quick Test" > /tmp/test.md
+> openbird publish --temp /tmp/test.md
+> # → ⚡ Published (temp, 1h) → https://openbird.jhao.space/warm-clear-seed
+> ```
+
+## 演示账号
+
+| 项 | 值 |
+|----|-----|
+| 用户名 | `demo` |
+| 密码 | `demo@123` |
+| 后端地址 | `https://openbird.jhao.space` |
+
+使用演示账号登录后即可体验完整功能。所有文档对所有人可见，请勿发布敏感内容。
+
 ## 命令参考
 
 ### openbird login
 
-登录或注册 CLI。token 保存在 `~/.config/openbird/credentials`。
+登录 CLI。token 保存在 `~/.config/openbird/credentials`。
 
 ```bash
 openbird login
@@ -155,8 +98,11 @@ openbird publish my-doc.md
 # 自定义 URL slug
 openbird publish --slug my-custom-url my-doc.md
 
-# 发布到命名空间（永久 URL，需先设置 username）
-openbird publish --namespace my-page my-doc.md
+# 发布到命名空间（永久 URL，需先设置 username，slug 自动分配）
+openbird publish --namespace my-doc.md
+
+# 命名空间 + 自定义 slug
+openbird publish --slug my-page --namespace my-doc.md
 
 # 临时发布（无需登录，1 小时自动过期）
 openbird publish --temp my-doc.md
@@ -171,7 +117,7 @@ openbird publish notes.txt
 | 参数 | 说明 |
 |------|------|
 | `--slug <value>` | 自定义 URL slug（如 `my-page`，3-60 字符，小写字母数字和连字符） |
-| `--namespace <value>` | 发布到 `@username/<value>` 永久 URL（不自动过期） |
+| `--namespace` | 发布到 `@username/<slug>` 永久 URL，slug 自动分配或配合 `--slug` 指定 |
 | `--temp` | 临时发布，无需登录，1 小时后自动过期 |
 
 输出示例：
@@ -262,9 +208,95 @@ about.md = @ppsteven/my-page
 
 后续重复 `openbird publish my-doc.md` 无需再指定 `--slug`，自动更新同一 URL。
 
-## 架构
+---
 
-### 整体架构
+# 第二部分：自部署
+
+## 前置要求
+
+- Node.js 18+
+- Cloudflare 账户（[免费注册](https://dash.cloudflare.com/sign-up)）
+- [wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) 4.x+
+
+```bash
+npm install -g wrangler
+wrangler login
+```
+
+## 1. 部署后端
+
+### 方式一：一键脚本（推荐）
+
+```bash
+git clone https://github.com/PPsteven/openbird.git
+cd openbird/worker
+
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env，设置你的域名：
+#   自定义域名:  OPENBIRD_DOMAIN=openbird.yourdomain.com
+#   workers.dev: OPENBIRD_DOMAIN=openbird.yoursubdomain.workers.dev
+
+chmod +x deploy.sh
+./deploy.sh
+```
+
+脚本会自动创建 KV namespaces、R2 buckets、生成 `wrangler.toml` 并执行部署。
+
+### 方式二：手动部署
+
+```bash
+git clone https://github.com/PPsteven/openbird.git
+cd openbird/worker
+
+# 创建 KV namespaces（记录输出的 id）
+wrangler kv namespace create USERS
+wrangler kv namespace create DOCS
+
+# 创建 R2 buckets
+wrangler r2 bucket create openbird-pages
+wrangler r2 bucket create openbird-images
+
+# 编辑 wrangler.toml，填入上面的 KV namespace id
+# [[kv_namespaces]]
+# binding = "USERS"
+# id = "你输出的id"
+
+# 部署
+wrangler deploy
+# → Deployed "openbird" → https://openbird.your-subdomain.workers.dev
+```
+
+<details>
+<summary>可选：绑定自定义域名</summary>
+
+两种方式部署完成后，均可绑定自定义域名：
+
+1. Cloudflare Dashboard → Workers & Pages → openbird → Settings → Domains & Routes
+2. 添加自定义域名（如 `openbird.yourdomain.com`）
+</details>
+
+## 2. 设置 CLI 指向自托管实例
+
+```bash
+export OPENBIRD_API_URL="https://openbird.your-subdomain.workers.dev"
+```
+
+## 3. 管理员账号
+
+部署时在 `.env` 中设置 `ADMIN_EMAIL` 和 `ADMIN_PASSWORD`，首次请求时自动创建管理员账号。
+
+管理员可使用 `openbird register` 创建其他用户：
+
+```bash
+openbird register --email user@example.com --password "password"
+```
+
+---
+
+# 架构
+
+## 整体架构
 
 ```
 CLI → api.js → Worker /api/v1/*
@@ -277,7 +309,7 @@ Browser → Worker /:slug → R2 → HTML 响应
 
 单 Cloudflare Worker 承载全部功能：API + 页面展示 + 图片代理。
 
-### 数据存储
+## 数据存储
 
 | 存储 | 用途 | 免费额度 |
 |------|------|----------|
@@ -286,7 +318,7 @@ Browser → Worker /:slug → R2 → HTML 响应
 | R2 `PAGES` | 渲染后的 HTML 页面 | 10 GB |
 | R2 `IMAGES` | 用户上传的图片 | 10 GB |
 
-### 页面渲染
+## 页面渲染
 
 Worker 内置零依赖 Markdown 渲染器，支持：
 
@@ -300,11 +332,13 @@ Worker 内置零依赖 Markdown 渲染器，支持：
 
 页面以完整 HTML 文档返回，内联 CSS 样式，可直接在浏览器中查看。
 
-## API 文档
+---
+
+# API 文档
 
 所有 API 需要 `Authorization: Bearer ob_xxx` 请求头（guest publish 除外）。
 
-### POST /api/v1/register
+## POST /api/v1/register
 
 注册已关闭。首个管理员账号在部署时通过 `ADMIN_EMAIL` / `ADMIN_PASSWORD` 环境变量自动创建。
 
@@ -321,7 +355,7 @@ curl -X POST https://openbird.jhao.space/api/v1/register \
 }
 ```
 
-### POST /api/v1/publish
+## POST /api/v1/publish
 
 发布或更新文档。
 
@@ -346,13 +380,11 @@ curl -X POST https://openbird.jhao.space/api/v1/publish \
   "username": null,
   "url": "https://openbird.jhao.space/my-page",
   "title": "Hello",
-  "expiresAt": "2026-10-02T10:00:00.000Z",
-  "ttlDays": 90,
   "created": true
 }
 ```
 
-### POST /api/v1/publish（临时发布）
+## POST /api/v1/publish（临时发布）
 
 无需认证，发布 1 小时临时页面。需显式传 `temp: true`。
 
@@ -381,7 +413,7 @@ curl -X POST https://openbird.jhao.space/api/v1/publish \
 }
 ```
 
-### GET /api/v1/documents
+## GET /api/v1/documents
 
 列出当前用户的所有文档。
 
@@ -401,7 +433,7 @@ curl https://openbird.jhao.space/api/v1/documents \
       "url": "https://openbird.jhao.space/my-page",
       "source": "api",
       "updatedAt": "2026-07-04T10:00:00.000Z",
-      "expiresAt": "2026-10-02T10:00:00.000Z"
+      "expiresAt": null
     }
   ]
 }
@@ -409,7 +441,7 @@ curl https://openbird.jhao.space/api/v1/documents \
 
 结果按 `updatedAt` 降序排列。命名空间文档 `username` 字段非 null。
 
-### DELETE /api/v1/documents
+## DELETE /api/v1/documents
 
 删除文档。
 
@@ -428,7 +460,7 @@ curl -X DELETE "https://openbird.jhao.space/api/v1/documents?slug=my-page&namesp
 { "ok": true }
 ```
 
-### POST /api/v1/upload-image
+## POST /api/v1/upload-image
 
 上传图片。
 
@@ -447,7 +479,7 @@ curl -X POST https://openbird.jhao.space/api/v1/upload-image \
 }
 ```
 
-### GET /:slug
+## GET /:slug
 
 访问已发布的页面。
 
@@ -456,7 +488,7 @@ curl https://openbird.jhao.space/my-page
 # → HTML 文档
 ```
 
-### GET /@:username/:slug
+## GET /@:username/:slug
 
 访问命名空间页面。
 
@@ -465,9 +497,11 @@ curl https://openbird.jhao.space/@ppsteven/my-page
 # → HTML 文档
 ```
 
-## 开发
+---
 
-### 本地开发
+# 开发
+
+## 本地开发
 
 ```bash
 # 启动本地 Worker（含 KV + R2 模拟）
@@ -475,7 +509,7 @@ cd worker
 wrangler dev
 # → Ready on http://localhost:8787
 
-# 在另一个终端测试（注册已关闭，返回 403）
+# 在另一个终端测试
 curl -X POST http://localhost:8787/api/v1/register \
   -H "Content-Type: application/json" \
   -d '{"email":"test@test.com","password":"123456"}'
@@ -489,7 +523,7 @@ export OPENBIRD_API_URL="http://localhost:8787"
 node src/cli.js publish test.md
 ```
 
-### 项目结构
+## 项目结构
 
 ```
 pagebird/
@@ -522,7 +556,7 @@ pagebird/
     └── package.json
 ```
 
-### 技术栈
+## 技术栈
 
 | 层 | 技术 |
 |----|------|
@@ -533,6 +567,8 @@ pagebird/
 | 图片存储 | Cloudflare R2 |
 | 部署 | wrangler CLI |
 
-## License
+---
+
+# License
 
 MIT
