@@ -4,7 +4,7 @@
 
 ## 当前焦点
 
-项目进入维护和优化阶段。
+D11: 自动派生 Username — 创建用户时自动从 email 派生 username，消除手动 `PUT /api/v1/account` 步骤。
 
 ## 进度
 
@@ -23,6 +23,7 @@
 - [x] D8: Worker 落地页服务 — 内联 site/ 到 Worker 源码，`GET /` 返回 index.html
 - [x] D9: Admin Register — 仅 admin 可通过 CLI 创建新用户
 - [x] D10: Publish Redesign — 默认 publish 永久化 + `--namespace` 拆分为 `--slug` + `--namespace`
+- [ ] D11: 自动派生 Username — 创建用户时自动从 email 派生 username
 
 ## 已知问题
 
