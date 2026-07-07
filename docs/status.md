@@ -24,6 +24,7 @@
 - [x] D9: Admin Register — 仅 admin 可通过 CLI 创建新用户
 - [x] D10: Publish Redesign — 默认 publish 永久化 + `--namespace` 拆分为 `--slug` + `--namespace`
 - [x] D11: 自动派生 Username — 创建用户时自动从 email 派生 username
+- [x] D12: Username 冲突检测 — 注册时检测 username 冲突，冲突则拒绝
 
 ## 已知问题
 
@@ -52,3 +53,4 @@
 - 绑定自定义域名（openbird.example.com）
 - CI/CD 自动化部署
 - 推送 main 后，在仓库 Settings → Pages → Source 选择 GitHub Actions，curl 验证 200
+- 所有 12 个 Spec 已全部完成，项目进入维护阶段

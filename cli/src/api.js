@@ -51,9 +51,10 @@ export async function anonymousPublish({ markdown, slug }) {
   return data
 }
 
-export async function registerUser({ email, password }) {
+export async function registerUser({ email, password, username }) {
   const body = { email }
   if (password) body.password = password
+  if (username) body.username = username
   return apiRequest("POST", "/api/v1/register", body)
 }
 

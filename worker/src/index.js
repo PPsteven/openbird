@@ -549,6 +549,7 @@ async function seedAdminUser(env) {
     }))
     await env.USERS.put("email:" + adminEmail, userId)
     await env.USERS.put("apikey:" + keyHash, JSON.stringify({ userId, createdAt: now }))
+    await env.USERS.put("username:" + username, userId)
   } catch (e) {
     console.error("seedAdminUser error:", e)
   }
@@ -617,7 +618,7 @@ async function handleRegister(request, env) {
     return json({ error: "Invalid request body" }, 400)
   }
 
-  const { email, password } = body
+  const { email, password, username: providedUsername } = body
   if (!email || typeof email !== "string" || email.trim().length === 0) {
     return json({ error: "Email is required" }, 400)
   }
@@ -629,12 +630,20 @@ async function handleRegister(request, env) {
   const existing = await env.USERS.get("email:" + email)
   if (existing) return json({ error: "Email already registered" }, 400)
 
+  const username = (providedUsername && typeof providedUsername === "string" && providedUsername.trim().length > 0)
+    ? providedUsername.trim()
+    : email.split('@')[0]
+
+  const existingUsername = await env.USERS.get("username:" + username)
+  if (existingUsername) {
+    return json({ error: `Username already taken: ${username}` }, 409)
+  }
+
   const userId = "user_" + randomHex(12)
   const apiKey = "ob_" + randomHex(32)
   const passwordHash = await sha256(actualPassword)
   const keyHash = await sha256(apiKey)
   const now = new Date().toISOString()
-  const username = email.split('@')[0]
 
   await env.USERS.put("user:" + userId, JSON.stringify({
     id: userId, email, username, passwordHash,
@@ -643,6 +652,7 @@ async function handleRegister(request, env) {
   }))
   await env.USERS.put("email:" + email, userId)
   await env.USERS.put("apikey:" + keyHash, JSON.stringify({ userId, createdAt: now }))
+  await env.USERS.put("username:" + username, userId)
 
   return json({ userId, apiKey, email }, 201)
 }
@@ -1182,8 +1192,21 @@ async function handleUpdateAccount(request, env) {
     return json({ error: "Invalid username format" }, 400)
   }
 
+  const oldUsername = auth.user.username
+
+  const existingUser = await env.USERS.get("username:" + username)
+  if (existingUser && existingUser !== auth.userId) {
+    return json({ error: `Username already taken: ${username}` }, 409)
+  }
+
   auth.user.username = username
   await env.USERS.put("user:" + auth.userId, JSON.stringify(auth.user))
+
+  if (oldUsername && oldUsername !== username) {
+    await env.USERS.delete("username:" + oldUsername)
+  }
+  await env.USERS.put("username:" + username, auth.userId)
+
   return json({ username })
 }
 

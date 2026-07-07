@@ -106,10 +106,11 @@ async function cmdRegister(registerArgs) {
     process.exit(1)
   }
 
-  let email = null, password = null
+  let email = null, password = null, username = null
   for (let i = 0; i < registerArgs.length; i++) {
     if (registerArgs[i] === "--email" && i + 1 < registerArgs.length) email = registerArgs[++i]
     else if (registerArgs[i] === "--password" && i + 1 < registerArgs.length) password = registerArgs[++i]
+    else if (registerArgs[i] === "--username" && i + 1 < registerArgs.length) username = registerArgs[++i]
   }
 
   if (!email) {
@@ -118,7 +119,7 @@ async function cmdRegister(registerArgs) {
   }
 
   try {
-    const result = await registerUser({ email, password })
+    const result = await registerUser({ email, password, username })
     console.log(`✓ User registered: ${result.email}`)
     console.log(`  API Key: ${result.apiKey}`)
   } catch (e) {
@@ -337,7 +338,7 @@ function cmdHelp() {
 
 Usage:
   openbird login                          Authenticate with OpenBird
-  openbird register --email <email> [--password]  Register a new user (admin only)
+  openbird register --email <email> [--password] [--username]  Register a new user (admin only)
   openbird publish <file.md>              Publish or update a document
   openbird publish --slug <slug> <file>   Publish with a custom slug
   openbird publish --namespace <file>     Publish to @username/slug namespace (auto-allocates slug)
