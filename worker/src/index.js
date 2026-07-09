@@ -557,6 +557,13 @@ async function seedAdminUser(env) {
 
 export default {
   async fetch(request, env) {
+    // Storage fallback: use R2 (env.PAGES) when bound; otherwise fall back to KV
+    // (env.PAGES_KV). When R2 is bound the behavior is unchanged; environments
+    // without R2 (e.g. free tier) can bind only PAGES_KV and still work.
+    if (!env.PAGES && env.PAGES_KV) {
+      env = { ...env, PAGES: kvPagesAdapter(env.PAGES_KV) }
+    }
+
     const url = new URL(request.url)
     const path = url.pathname
     const method = request.method
@@ -565,6 +572,7 @@ export default {
     await seedAdminUser(env)
 
     if (path === "/api/v1/register" && method === "POST") return handleRegister(request, env)
+    if (path === "/api/v1/transcript" && method === "POST") return handleTranscriptPublish(request, env)
     if (path === "/api/v1/publish" && method === "POST") {
       const auth = request.headers.get("Authorization")
       if (auth && auth.startsWith("Bearer ob_")) {
@@ -894,6 +902,82 @@ async function allocateGuestSlug(env) {
   return null
 }
 
+// Generic transcript publishing: accepts a universal envelope of role-tagged
+// markdown messages only. It knows nothing about any tool/option concepts —
+// callers serialize such structures into the message markdown via the generic
+// :::details / :::choices blocks. Reuses the existing guest-publish conventions
+// (guest slug, R2 PAGES storage, DOCS KV, 1h expiry).
+async function handleTranscriptPublish(request, env) {
+  let body
+  try { body = await request.json() } catch {
+    return json({ error: "Invalid request body" }, 400)
+  }
+
+  const { temp, theme, meta, messages } = body
+
+  if (!temp) {
+    return json({ error: "temp must be true for transcript share" }, 401)
+  }
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return json({ error: "Missing messages field" }, 400)
+  }
+
+  const activeTheme = theme === "chat" ? "chat" : "document"
+
+  // Validate each message and enforce the per-message markdown size limit
+  // (256KB, matching the existing publish conventions).
+  const normMessages = []
+  for (const msg of messages) {
+    if (!msg || typeof msg !== "object") {
+      return json({ error: "Invalid message entry" }, 400)
+    }
+    const role = (typeof msg.role === "string" && msg.role.trim()) ? msg.role.trim() : "assistant"
+    const markdown = typeof msg.markdown === "string" ? msg.markdown : ""
+    const markdownBytes = new TextEncoder().encode(markdown).length
+    if (markdownBytes > 262144) {
+      return json({ error: "Markdown too large (max 262144 bytes)" }, 413)
+    }
+    const name = (typeof msg.name === "string" && msg.name.trim()) ? msg.name.trim() : null
+    normMessages.push({ role, name, markdown })
+  }
+
+  const metaObj = (meta && typeof meta === "object") ? meta : {}
+  const title = (typeof metaObj.title === "string" && metaObj.title.trim())
+    ? metaObj.title.trim()
+    : "Shared transcript"
+
+  const slug = await allocateGuestSlug(env)
+  if (!slug) {
+    return json({ error: "Failed to allocate document slug" }, 503)
+  }
+
+  const html = renderTranscript({ theme: activeTheme, meta: metaObj, messages: normMessages })
+
+  const htmlBytes = new TextEncoder().encode(html).length
+  if (htmlBytes > 524288) {
+    return json({ error: "Rendered HTML too large (max 524288 bytes)" }, 413)
+  }
+
+  const now = new Date().toISOString()
+  const expiresAt = new Date(Date.now() + 3600000).toISOString()
+
+  const htmlKey = `pages/guest/${slug}/index.html`
+  await env.PAGES.put(htmlKey, html, {
+    httpMetadata: { contentType: "text/html" },
+    customMetadata: { title, slug, guest: "true", kind: "transcript", createdAt: now, expiresAt }
+  })
+
+  const metaEntry = { slug, title, guest: true, source: "transcript", kind: "transcript", createdAt: now, expiresAt, ttlMinutes: 60 }
+  await env.DOCS.put("guest:" + slug, JSON.stringify(metaEntry), { expirationTtl: 3600 })
+
+  const baseUrl = getBaseUrl(request)
+  return json({
+    slug, url: `${baseUrl}/${slug}`,
+    title, expiresAt, ttlMinutes: 60, guest: true
+  }, 201)
+}
+
 async function handleList(request, env) {
   const auth = await verifyAuth(request, env)
   if (!auth) return json({ error: "Invalid API key" }, 401)
@@ -1092,6 +1176,23 @@ async function handleLoginSubmit(request, env) {
   return json({ userId: user.id, apiKey })
 }
 
+// Adapts a KV namespace to the minimal R2 subset (get/put/delete) used to
+// store/serve page HTML when R2 is not available.
+function kvPagesAdapter(kv) {
+  return {
+    async get(key) {
+      const value = await kv.get(key)
+      return value === null ? null : { body: value }
+    },
+    async put(key, value) {
+      await kv.put(key, value)
+    },
+    async delete(key) {
+      await kv.delete(key)
+    }
+  }
+}
+
 async function servePage(slug, env) {
   let obj = await env.PAGES.get("pages/" + slug + "/index.html")
   if (obj) {
@@ -1230,12 +1331,33 @@ async function allocateSlug(env) {
 }
 
 function renderMarkdown(markdown) {
+  return wrapHtml(renderMarkdownFragment(markdown))
+}
+
+// Markdown → HTML fragment (no page wrapper). Structurally identical to the
+// previous renderMarkdown body, plus generic :::container block support. The
+// /api/v1/publish output is unchanged: without any ::: blocks this produces the
+// exact same HTML as before.
+function renderMarkdownFragment(markdown) {
   let result = markdown
 
   const codeBlocks = []
   result = result.replace(/```([\s\S]*?)```/g, (_, code) => {
     const placeholder = `%%CODEBLOCK_${codeBlocks.length}%%`
     codeBlocks.push(code)
+    return placeholder
+  })
+
+  // Generic container blocks :::xxx … ::: (extracted to placeholders before the
+  // rest of the markdown pipeline so they aren't mangled by later regexes).
+  // Supports :::details <summary> and :::choices; unrecognized :::xxx degrade to
+  // plain text.
+  const containerBlocks = []
+  result = result.replace(/^:::(\S+)([^\n]*)\n([\s\S]*?)^:::[ \t]*$/gm, (whole, kind, arg, inner) => {
+    const rendered = renderContainerBlock(kind, arg.trim(), inner)
+    if (rendered === null) return whole // unrecognized: keep as-is, treated as plain text
+    const placeholder = `%%CONTAINER_${containerBlocks.length}%%`
+    containerBlocks.push(rendered)
     return placeholder
   })
 
@@ -1291,13 +1413,138 @@ function renderMarkdown(markdown) {
     return `<pre><code>${escapeHtml(code.trim())}</code></pre>`
   })
 
+  result = result.replace(/<p>%%CONTAINER_(\d+)%%<\/p>|%%CONTAINER_(\d+)%%/g, (_, a, b) => {
+    return containerBlocks[parseInt(a != null ? a : b)]
+  })
+
   result = result.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
   result = result.replace(/\*(.+?)\*/g, "<em>$1</em>")
   result = result.replace(/`([^`]+)`/g, "<code>$1</code>")
   result = result.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">')
   result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
 
-  return wrapHtml(result)
+  return result
+}
+
+// Generic container-block rendering. Returns an HTML string; an unrecognized
+// kind returns null (caller keeps it as plain text).
+function renderContainerBlock(kind, arg, inner) {
+  if (kind === "details") {
+    const summary = arg || "Details"
+    const innerHtml = inner.trim() ? renderMarkdownFragment(inner) : ""
+    return `<details class="ct-details"><summary>${escapeHtml(summary)}</summary><div class="ct-details-body">${innerHtml}</div></details>`
+  }
+  if (kind === "choices") {
+    // Parse - [x] / - [ ] list items into chips.
+    const chips = []
+    const lines = inner.split(/\r?\n/)
+    for (const line of lines) {
+      const m = line.match(/^\s*[-*]\s+\[([ xX])\]\s+(.*)$/)
+      if (!m) continue
+      const picked = m[1].toLowerCase() === "x"
+      const label = m[2].trim()
+      chips.push(`<span class="ch${picked ? " pick" : ""}">${escapeHtml(label)}</span>`)
+    }
+    if (!chips.length) return null
+    return `<div class="ct-choices">${chips.join("")}</div>`
+  }
+  return null
+}
+
+// ── Transcript → semantic HTML ─────────────────────────────────────
+// Emits one DOM, with visuals switched via <body> theme-document / theme-chat.
+function renderTranscript({ theme, meta, messages }) {
+  const title = (typeof meta.title === "string" && meta.title.trim()) ? meta.title.trim() : "Shared transcript"
+  const subtitle = (typeof meta.subtitle === "string" && meta.subtitle.trim()) ? meta.subtitle.trim() : null
+  const source = (typeof meta.source === "string" && meta.source.trim()) ? meta.source.trim() : null
+  const date = (typeof meta.date === "string" && meta.date.trim()) ? meta.date.trim() : null
+  const count = Number.isFinite(meta.count) ? meta.count : messages.length
+
+  const metaBits = []
+  if (source) metaBits.push(`<span class="mi">Source <b>${escapeHtml(source)}</b></span>`)
+  if (subtitle) metaBits.push(`${metaBits.length ? '<span class="sep">/</span>' : ""}<span class="mi"><b>${escapeHtml(subtitle)}</b></span>`)
+  if (date) metaBits.push(`${metaBits.length ? '<span class="sep">/</span>' : ""}<span class="mi">${escapeHtml(date)}</span>`)
+  metaBits.push(`${metaBits.length ? '<span class="sep">/</span>' : ""}<span class="mi">${escapeHtml(String(count))} messages</span>`)
+
+  const messagesHtml = messages.map(msg => {
+    const role = msg.role
+    const isUser = role === "user"
+    const dataRole = isUser ? "user" : "assistant"
+    const displayName = msg.name || (isUser ? "You" : (role === "assistant" ? "Assistant" : role))
+    const avatarText = displayName && displayName[0] ? displayName[0] : (isUser ? "U" : "A")
+
+    const bodyHtml = msg.markdown && msg.markdown.trim()
+      ? renderMarkdownFragment(msg.markdown)
+      : ""
+
+    return `<section class="turn" data-role="${escapeHtml(dataRole)}">
+  <div class="turn-head">
+    <span class="avatar">${escapeHtml(avatarText)}</span>
+    <span class="who"><b>${escapeHtml(displayName)}</b><span class="role-label">${escapeHtml(role)}</span></span>
+  </div>
+  <div class="turn-body">
+    <div class="markdown">${bodyHtml}</div>
+  </div>
+</section>`
+  }).join("\n")
+
+  const brand = source || "OpenBird"
+  const header = `<header class="session-head">
+  <span class="badge"><span class="pulse"></span>shared transcript</span>
+  <h1 class="session-title">${escapeHtml(title)}</h1>
+  <div class="session-meta">${metaBits.join("")}</div>
+</header>`
+
+  const footer = `<footer class="session-foot">
+  <span>via <span class="brand">${escapeHtml(brand)}</span> → OpenBird</span>
+  <span>This page expires in 1 hour</span>
+</footer>`
+
+  const toggle = `<div class="theme-toggle" role="group" aria-label="Theme toggle">
+  <button type="button" data-theme="document">Document</button>
+  <span class="tog-sep">⇄</span>
+  <button type="button" data-theme="chat">Chat</button>
+</div>`
+
+  return wrapSessionHtml({ title, theme, header, toggle, turnsHtml: messagesHtml, footer })
+}
+
+function wrapSessionHtml({ title, theme, header, toggle, turnsHtml, footer }) {
+  const bodyClass = theme === "chat" ? "theme-chat" : "theme-document"
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(title)} — OpenBird</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Newsreader:ital@0;1&family=DM+Sans:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+${SESSION_CSS}
+</style>
+</head>
+<body class="${bodyClass}">
+<div class="wrap">
+${toggle}
+${header}
+<main class="turns">
+${turnsHtml}
+</main>
+${footer}
+</div>
+<script>
+(function(){
+  var body=document.body;
+  var KEY="openbird-session-theme";
+  try{var saved=localStorage.getItem(KEY);if(saved==="chat"||saved==="document"){body.className=saved==="chat"?"theme-chat":"theme-document"}}catch(e){}
+  function sync(){var chat=body.classList.contains("theme-chat");document.querySelectorAll(".theme-toggle button").forEach(function(b){b.classList.toggle("active",b.dataset.theme===(chat?"chat":"document"))})}
+  document.querySelectorAll(".theme-toggle button").forEach(function(b){b.addEventListener("click",function(){var t=b.dataset.theme;body.className=t==="chat"?"theme-chat":"theme-document";try{localStorage.setItem(KEY,t)}catch(e){}sync()})});
+  sync();
+})();
+</script>
+</body>
+</html>`
 }
 
 function wrapHtml(content, title) {
@@ -1358,3 +1605,212 @@ function generateSlug() {
   while (adj2 === adj1) adj2 = pick(ADJECTIVES)
   return `${adj1}-${adj2}-${pick(NOUNS)}`
 }
+
+// Both themes share one semantic DOM, switched via body.theme-document / body.theme-chat.
+const SESSION_CSS = `
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;-webkit-font-smoothing:antialiased}
+.wrap{margin:0 auto;position:relative}
+.turn-body>.markdown>*:first-child{margin-top:0}
+.markdown img{max-width:100%;height:auto}
+.ct-details>summary::-webkit-details-marker{display:none}
+.ct-details>summary{list-style:none}
+
+/* ── Theme toggle (shared skeleton; each theme overrides colors) ── */
+.theme-toggle{position:fixed;top:16px;right:16px;z-index:50;display:inline-flex;align-items:center;
+  gap:6px;padding:5px;border-radius:999px;backdrop-filter:blur(8px);font-size:13px}
+.theme-toggle button{border:0;background:transparent;cursor:pointer;padding:5px 12px;border-radius:999px;
+  font:inherit;font-size:13px;line-height:1;transition:all .18s}
+.theme-toggle .tog-sep{opacity:.5;font-size:12px}
+
+/* ══════════════ Document theme (light editorial typography) ══════════════ */
+body.theme-document{
+  --paper:#fbfaf7;--ink:#1c1a17;--muted:#8a847b;--faint:#c9c4ba;--rule:#e9e5dd;
+  --accent:#b0451f;--card:#ffffff;--code-bg:#f6f3ee;
+  background:var(--paper);color:var(--ink);
+  font-family:"DM Sans",sans-serif;line-height:1.72;font-size:17px;
+}
+body.theme-document .wrap{max-width:720px;padding:72px 24px 120px}
+body.theme-document .theme-toggle{background:rgba(255,255,255,.82);border:1px solid var(--rule);
+  box-shadow:0 6px 20px -12px rgba(0,0,0,.3)}
+body.theme-document .theme-toggle button{color:var(--muted)}
+body.theme-document .theme-toggle button.active{background:var(--accent);color:#fff}
+/* header */
+body.theme-document .session-head{margin-bottom:56px}
+body.theme-document .badge{display:inline-flex;align-items:center;gap:8px;font-size:12px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:20px}
+body.theme-document .badge .pulse{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+body.theme-document .session-title{font-family:"Fraunces",serif;font-weight:900;
+  font-size:clamp(34px,6vw,52px);line-height:1.04;letter-spacing:-.01em;margin:0 0 22px}
+body.theme-document .session-meta{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--muted);
+  font-size:14px;padding-bottom:26px;border-bottom:1px solid var(--rule)}
+body.theme-document .session-meta b{color:var(--ink);font-weight:500}
+body.theme-document .session-meta .sep{color:var(--faint)}
+/* turns */
+body.theme-document .turn{margin:0 0 10px}
+body.theme-document .turn-head{display:flex;align-items:center;gap:10px;margin:38px 0 14px}
+body.theme-document .avatar{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+  font-family:"Fraunces",serif;font-weight:600;font-size:14px;color:#fff}
+body.theme-document .turn[data-role="user"] .avatar{background:#3a3632}
+body.theme-document .turn[data-role="assistant"] .avatar{background:var(--accent)}
+body.theme-document .who{font-weight:600;font-size:14px;display:flex;align-items:baseline;gap:8px}
+body.theme-document .who .role-label{color:var(--muted);font-size:13px;font-weight:400}
+body.theme-document .who .role-label::before{content:"· "}
+/* user turn = quote-style typography */
+body.theme-document .turn[data-role="user"] .markdown{font-family:"Newsreader",serif;font-size:20px;
+  line-height:1.55;color:#38332e;padding-left:36px;border-left:2px solid var(--rule)}
+body.theme-document .turn[data-role="user"] .markdown p{margin:0}
+body.theme-document .markdown p{margin:0 0 18px}
+body.theme-document .markdown h1,body.theme-document .markdown h2,body.theme-document .markdown h3,
+body.theme-document .markdown h4{font-family:"Fraunces",serif;font-weight:600;margin:34px 0 12px}
+body.theme-document .markdown h1{font-size:28px}
+body.theme-document .markdown h2{font-size:24px}
+body.theme-document .markdown h3{font-size:22px}
+body.theme-document .markdown ul,body.theme-document .markdown ol{margin:0 0 20px;padding-left:0;list-style:none}
+body.theme-document .markdown li{position:relative;padding-left:26px;margin:0 0 10px}
+body.theme-document .markdown li::before{content:"";position:absolute;left:4px;top:12px;width:7px;height:7px;
+  border-radius:2px;background:var(--accent);transform:rotate(45deg)}
+body.theme-document .markdown strong{font-weight:600}
+body.theme-document .markdown code{font-family:"JetBrains Mono",monospace;font-size:.85em;
+  background:var(--code-bg);padding:.15em .4em;border-radius:4px}
+body.theme-document .markdown pre{background:#20201d;color:#e8e4da;border-radius:12px;padding:20px 22px;
+  overflow-x:auto;font-family:"JetBrains Mono",monospace;font-size:13.5px;line-height:1.7;margin:0 0 22px;
+  box-shadow:0 12px 30px -18px rgba(0,0,0,.5)}
+body.theme-document .markdown pre code{background:none;padding:0;color:inherit}
+body.theme-document .markdown blockquote{background:var(--card);border:1px solid var(--rule);
+  border-left:3px solid var(--accent);border-radius:10px;padding:14px 18px;margin:0 0 22px;color:#4a453e}
+body.theme-document .markdown img{border-radius:14px;display:block;margin:0 0 8px;
+  box-shadow:0 20px 50px -24px rgba(0,0,0,.35)}
+body.theme-document .markdown table{border-collapse:collapse;width:100%;margin:0 0 20px;font-size:15px}
+body.theme-document .markdown th,body.theme-document .markdown td{border:1px solid var(--rule);padding:.5em .75em}
+body.theme-document .markdown th{background:var(--code-bg)}
+body.theme-document .markdown a{color:var(--accent)}
+body.theme-document .markdown hr{border:0;height:1px;background:var(--rule);margin:32px 0}
+/* :::details collapsible (light: subtle bar) */
+body.theme-document .ct-details{margin:0 0 22px;border:1px solid var(--rule);border-radius:9px;
+  background:var(--card);overflow:hidden}
+body.theme-document .ct-details>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;
+  font-size:14px;font-weight:500;color:#443f39;padding:11px 15px}
+body.theme-document .ct-details>summary::-webkit-details-marker{display:none}
+body.theme-document .ct-details>summary::before{content:"▸";color:var(--accent);font-size:12px;transition:transform .18s}
+body.theme-document .ct-details[open]>summary::before{transform:rotate(90deg)}
+body.theme-document .ct-details[open]>summary{border-bottom:1px solid var(--rule)}
+body.theme-document .ct-details-body{padding:14px 16px}
+body.theme-document .ct-details-body>*:first-child{margin-top:0}
+body.theme-document .ct-details-body>*:last-child{margin-bottom:0}
+/* :::choices chips (light: pill chips) */
+body.theme-document .ct-choices{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 22px}
+body.theme-document .ct-choices .ch{font-size:14px;padding:8px 15px;border:1px solid var(--rule);border-radius:999px;
+  background:var(--card);color:#443f39}
+body.theme-document .ct-choices .ch.pick{border-color:var(--accent);color:var(--accent);background:#faf1ec;font-weight:500}
+body.theme-document .ct-choices .ch.pick::before{content:"✓ ";font-weight:600}
+/* footer */
+body.theme-document .session-foot{margin-top:64px;padding-top:24px;border-top:1px solid var(--rule);
+  display:flex;justify-content:space-between;align-items:center;color:var(--faint);font-size:13px}
+body.theme-document .session-foot .brand{font-family:"Fraunces",serif;font-weight:600;color:var(--muted)}
+
+/* ══════════════ Chat theme (dark Terminal Noir) ══════════════ */
+body.theme-chat{
+  --bg:#0a0a0b;--panel:#131316;--line:rgba(255,255,255,.07);--text:#e7e7ea;--muted:#7c7c88;
+  --faint:#4a4a55;--green:#00ff88;--green-dim:rgba(0,255,136,.12);--amber:#ffb800;--blue:#00d4ff;
+  background:var(--bg);color:var(--text);font-family:"Space Grotesk",sans-serif;
+  font-size:15.5px;line-height:1.6;
+  background-image:radial-gradient(circle at 50% -10%,rgba(0,255,136,.05),transparent 55%),
+    linear-gradient(rgba(255,255,255,.015) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.015) 1px,transparent 1px);
+  background-size:auto,32px 32px,32px 32px;background-attachment:fixed;
+}
+body.theme-chat .wrap{max-width:760px;padding:44px 20px 100px}
+body.theme-chat .theme-toggle{background:rgba(19,19,22,.8);border:1px solid var(--line);
+  font-family:"JetBrains Mono",monospace}
+body.theme-chat .theme-toggle button{color:var(--muted)}
+body.theme-chat .theme-toggle button.active{background:var(--green-dim);color:var(--green);
+  box-shadow:0 0 14px -6px var(--green)}
+/* header */
+body.theme-chat .session-head{border:1px solid var(--line);border-radius:16px;
+  background:linear-gradient(180deg,var(--panel),#0e0e10);padding:26px 26px 22px;margin-bottom:36px;
+  position:relative;overflow:hidden}
+body.theme-chat .session-head::before{content:"";position:absolute;inset:0;background:
+  repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(255,255,255,.012) 3px,rgba(255,255,255,.012) 4px);
+  pointer-events:none}
+body.theme-chat .badge{display:inline-flex;align-items:center;gap:7px;font-family:"JetBrains Mono",monospace;
+  font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--green);padding:4px 10px;
+  border:1px solid var(--green-dim);border-radius:6px;background:var(--green-dim);margin-bottom:16px;position:relative}
+body.theme-chat .badge .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+body.theme-chat .session-title{font-size:clamp(24px,4.5vw,34px);font-weight:700;letter-spacing:-.02em;
+  margin:0 0 14px;line-height:1.12;position:relative}
+body.theme-chat .session-meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-family:"JetBrains Mono",monospace;
+  font-size:12px;color:var(--muted);position:relative}
+body.theme-chat .session-meta b{color:var(--text);font-weight:500}
+body.theme-chat .session-meta .sep{color:var(--faint)}
+/* message rows */
+body.theme-chat .turn{display:grid;grid-template-columns:34px 1fr;gap:14px;margin:0 0 26px}
+body.theme-chat .turn-head{display:contents}
+body.theme-chat .avatar{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+  font-weight:700;font-family:"JetBrains Mono",monospace;font-size:13px;grid-row:1;grid-column:1}
+body.theme-chat .turn[data-role="user"] .avatar{background:#26262c;color:#c9c9d2;border:1px solid var(--line)}
+body.theme-chat .turn[data-role="assistant"] .avatar{background:var(--green-dim);color:var(--green);
+  border:1px solid rgba(0,255,136,.25);box-shadow:0 0 16px -4px rgba(0,255,136,.4)}
+body.theme-chat .who{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--muted);
+  margin-bottom:8px;display:flex;align-items:center;gap:8px;grid-row:1;grid-column:2}
+body.theme-chat .who b{color:var(--text);font-weight:500}
+body.theme-chat .who .role-label::before{content:"· "}
+body.theme-chat .turn-body{grid-row:2;grid-column:2}
+/* bubble: markdown body as chat bubble */
+body.theme-chat .turn-body .markdown{background:var(--panel);border:1px solid var(--line);
+  border-radius:4px 14px 14px 14px;padding:14px 18px}
+body.theme-chat .turn[data-role="user"] .turn-body .markdown{background:#17171b;border-color:rgba(255,255,255,.05)}
+body.theme-chat .markdown p{margin:0 0 12px}
+body.theme-chat .markdown p:last-child{margin-bottom:0}
+body.theme-chat .markdown h1,body.theme-chat .markdown h2,body.theme-chat .markdown h3,
+body.theme-chat .markdown h4{font-size:15px;color:var(--green);margin:18px 0 10px;font-weight:600;
+  font-family:"JetBrains Mono",monospace;letter-spacing:.01em}
+body.theme-chat .markdown h1::before,body.theme-chat .markdown h2::before,
+body.theme-chat .markdown h3::before,body.theme-chat .markdown h4::before{content:"# ";color:var(--faint)}
+body.theme-chat .markdown ul,body.theme-chat .markdown ol{margin:0 0 14px;padding-left:0;list-style:none}
+body.theme-chat .markdown li{position:relative;padding-left:22px;margin:0 0 8px}
+body.theme-chat .markdown li::before{content:"▸";position:absolute;left:2px;color:var(--green);font-size:12px;top:2px}
+body.theme-chat .markdown strong{color:#fff;font-weight:600}
+body.theme-chat .markdown code{font-family:"JetBrains Mono",monospace;font-size:.86em;background:#000;
+  color:var(--amber);padding:.12em .4em;border-radius:4px;border:1px solid var(--line)}
+body.theme-chat .markdown pre{background:#050506;border:1px solid var(--line);border-radius:12px;
+  padding:16px 18px;overflow-x:auto;font-family:"JetBrains Mono",monospace;font-size:13px;line-height:1.65;
+  margin:0 0 14px;color:#c8c8d0}
+body.theme-chat .markdown pre code{background:none;padding:0;border:0;color:inherit}
+body.theme-chat .markdown blockquote{background:var(--green-dim);border:1px solid rgba(0,255,136,.2);
+  border-radius:10px;padding:12px 15px;margin:0 0 14px;color:#bfe9d2}
+body.theme-chat .markdown img{border-radius:12px;display:block;border:1px solid var(--line);margin:0 0 8px}
+body.theme-chat .markdown table{border-collapse:collapse;width:100%;margin:0 0 14px;font-size:13.5px}
+body.theme-chat .markdown th,body.theme-chat .markdown td{border:1px solid var(--line);padding:.4em .6em}
+body.theme-chat .markdown th{background:#0d0d0f;color:var(--green)}
+body.theme-chat .markdown a{color:var(--blue)}
+body.theme-chat .markdown hr{border:0;height:1px;background:var(--line);margin:20px 0}
+/* :::details collapsible (terminal: collapsible block) */
+body.theme-chat .ct-details{margin:0 0 14px;border:1px solid var(--line);border-radius:8px;
+  background:#0d0d0f;overflow:hidden}
+body.theme-chat .ct-details>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;
+  font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--muted);padding:10px 14px;background:#000;
+  transition:border-color .15s}
+body.theme-chat .ct-details>summary::-webkit-details-marker{display:none}
+body.theme-chat .ct-details>summary::before{content:"▸";color:var(--green);font-size:12px;transition:transform .18s}
+body.theme-chat .ct-details[open]>summary::before{transform:rotate(90deg)}
+body.theme-chat .ct-details>summary:hover{color:var(--green)}
+body.theme-chat .ct-details[open]>summary{border-bottom:1px solid var(--line)}
+body.theme-chat .ct-details-body{padding:13px 15px;font-size:14px}
+body.theme-chat .ct-details-body>*:first-child{margin-top:0}
+body.theme-chat .ct-details-body>*:last-child{margin-bottom:0}
+/* :::choices chips (terminal: neon selected chips) */
+body.theme-chat .ct-choices{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 14px}
+body.theme-chat .ct-choices .ch{font-family:"JetBrains Mono",monospace;font-size:13px;padding:8px 14px;
+  border:1px solid var(--line);border-radius:8px;background:#0d0d0f;color:var(--muted)}
+body.theme-chat .ct-choices .ch.pick{border-color:var(--green);color:var(--green);background:var(--green-dim);
+  box-shadow:0 0 14px -6px var(--green)}
+body.theme-chat .ct-choices .ch.pick::before{content:"[x] "}
+body.theme-chat .ct-choices .ch:not(.pick)::before{content:"[ ] ";color:var(--faint)}
+/* footer */
+body.theme-chat .session-foot{margin-top:56px;padding-top:22px;border-top:1px solid var(--line);
+  display:flex;justify-content:space-between;align-items:center;font-family:"JetBrains Mono",monospace;
+  font-size:12px;color:var(--faint)}
+body.theme-chat .session-foot .brand{color:var(--green)}
+`
