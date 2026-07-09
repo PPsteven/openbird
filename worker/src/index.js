@@ -583,6 +583,7 @@ export default {
     if (path === "/api/v1/documents" && method === "GET") return handleList(request, env)
     if (path === "/api/v1/documents" && method === "DELETE") return handleRemove(request, env)
     if (path === "/api/v1/upload-image" && method === "POST") return handleUploadImage(request, env)
+    if (path === "/api/v1/transcript-image" && method === "POST") return handleTranscriptImage(request, env)
     if (path === "/api/v1/account" && method === "PUT") return handleUpdateAccount(request, env)
     if (path === "/api/v1/login" && method === "GET") return handleLoginPage(request, env)
     if (path === "/api/v1/login" && method === "POST") return handleLoginSubmit(request, env)
@@ -1249,25 +1250,113 @@ async function handleUploadImage(request, env) {
 
   const ext = EXT_MAP[contentType]
   const key = `images/${auth.userId}/${randomHex(16)}${ext}`
-  await env.IMAGES.put(key, buffer, { httpMetadata: { contentType } })
+  await imagesStore(env).put(key, buffer, contentType)
 
   const baseUrl = getBaseUrl(request)
   return json({ url: `${baseUrl}/${key}` }, 201)
 }
 
+// Guest 图片上传端点：无需登录（分享场景），供 transcript 图片同源托管用。
+// 接收原始图片字节（Content-Type: application/octet-stream），mime 从 X-Image-Type 读。
+// 存到 IMAGES R2；无 R2 时回退 PAGES_KV（key 前缀区分，仿 kvPagesAdapter 思路）。
+async function handleTranscriptImage(request, env) {
+  const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"])
+  const EXT_MAP = { "image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp", "image/svg+xml": ".svg" }
+  const MAX_BYTES = 5 * 1024 * 1024
+
+  let mime = (request.headers.get("X-Image-Type") || "").trim().toLowerCase()
+  if (!mime) {
+    const ct = (request.headers.get("Content-Type") || "").trim().toLowerCase()
+    // 若客户端直接用图片 mime 作为 Content-Type，也接受
+    if (ct.startsWith("image/")) mime = ct.split(";")[0].trim()
+  }
+  if (!ALLOWED_TYPES.has(mime)) {
+    return json({ error: `Unsupported image type: ${mime || "unknown"}` }, 400)
+  }
+
+  let buffer
+  try {
+    buffer = await request.arrayBuffer()
+  } catch {
+    return json({ error: "Invalid image body" }, 400)
+  }
+  if (!buffer || buffer.byteLength === 0) {
+    return json({ error: "Empty image body" }, 400)
+  }
+  if (buffer.byteLength > MAX_BYTES) {
+    return json({ error: "Image too large (max 5 MB)" }, 413)
+  }
+
+  const ext = EXT_MAP[mime]
+  const key = `images/guest/${randomHex(16)}${ext}`
+  await imagesStore(env).put(key, buffer, mime)
+
+  const baseUrl = getBaseUrl(request)
+  return json({ url: `${baseUrl}/${key}` }, 201)
+}
+
+// IMAGES 存储：有 R2（env.IMAGES）用 R2；否则回退到 KV（env.PAGES_KV），
+// KV 里以 img: 前缀区分，值存 base64 + contentType（KV 只存文本）。
+// authed /upload-image 与 guest /transcript-image 共用同一后端读写，serveImage 也走它。
+function imagesStore(env) {
+  if (env.IMAGES) {
+    return {
+      async put(key, buffer, contentType) {
+        await env.IMAGES.put(key, buffer, { httpMetadata: { contentType } })
+      },
+      async get(key) {
+        const obj = await env.IMAGES.get(key)
+        if (!obj) return null
+        return { body: obj.body, contentType: obj.httpMetadata?.contentType || "application/octet-stream" }
+      }
+    }
+  }
+  const kv = env.PAGES_KV
+  return {
+    async put(key, buffer, contentType) {
+      if (!kv) throw new Error("No image storage backend (IMAGES/PAGES_KV) bound")
+      const b64 = bytesToBase64(new Uint8Array(buffer))
+      await kv.put("img:" + key, JSON.stringify({ contentType, data: b64 }))
+    },
+    async get(key) {
+      if (!kv) return null
+      const raw = await kv.get("img:" + key)
+      if (!raw) return null
+      const { contentType, data } = JSON.parse(raw)
+      return { body: base64ToBytes(data), contentType: contentType || "application/octet-stream" }
+    }
+  }
+}
+
 async function serveImage(path, env) {
   const key = path.slice(1)
-  const obj = await env.IMAGES.get(key)
+  const obj = await imagesStore(env).get(key)
   if (!obj) {
     return new Response("Not Found", { status: 404 })
   }
 
   return new Response(obj.body, {
     headers: {
-      "Content-Type": obj.httpMetadata?.contentType || "application/octet-stream",
+      "Content-Type": obj.contentType || "application/octet-stream",
       "Cache-Control": "public, max-age=31536000, immutable"
     }
   })
+}
+
+function bytesToBase64(bytes) {
+  let binary = ""
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk))
+  }
+  return btoa(binary)
+}
+
+function base64ToBytes(b64) {
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
 }
 
 async function serveNamespacedPage(username, slug, env) {
@@ -1344,7 +1433,14 @@ function renderMarkdownFragment(markdown) {
   const codeBlocks = []
   result = result.replace(/```([\s\S]*?)```/g, (_, code) => {
     const placeholder = `%%CODEBLOCK_${codeBlocks.length}%%`
-    codeBlocks.push(code)
+    // Strip the fence info string (language identifier), e.g. the leading
+    // `bash` / `json` line of ```bash / ```json. Only strip when a newline is
+    // present (a real multi-line fence) to avoid mangling single-line ```code```.
+    const nl = code.indexOf('\n')
+    const stripped = (nl !== -1 && /^[^\s`]*$/.test(code.slice(0, nl).trim()))
+      ? code.slice(nl + 1)
+      : code
+    codeBlocks.push(stripped)
     return placeholder
   })
 
@@ -1673,11 +1769,14 @@ body.theme-document .markdown li::before{content:"";position:absolute;left:4px;t
   border-radius:2px;background:var(--accent);transform:rotate(45deg)}
 body.theme-document .markdown strong{font-weight:600}
 body.theme-document .markdown code{font-family:"JetBrains Mono",monospace;font-size:.85em;
-  background:var(--code-bg);padding:.15em .4em;border-radius:4px}
-body.theme-document .markdown pre{background:#20201d;color:#e8e4da;border-radius:12px;padding:20px 22px;
-  overflow-x:auto;font-family:"JetBrains Mono",monospace;font-size:13.5px;line-height:1.7;margin:0 0 22px;
-  box-shadow:0 12px 30px -18px rgba(0,0,0,.5)}
-body.theme-document .markdown pre code{background:none;padding:0;color:inherit}
+  background:var(--code-bg);padding:.15em .4em;border-radius:4px;
+  word-break:break-word;overflow-wrap:break-word}
+body.theme-document .markdown pre{background:#20201d;color:#e8e4da;border-radius:12px;padding:18px 20px;
+  overflow-x:auto;max-width:100%;font-family:"JetBrains Mono",monospace;font-size:13.5px;line-height:1.7;
+  margin:0 0 22px;box-shadow:0 12px 30px -18px rgba(0,0,0,.5);
+  -webkit-overflow-scrolling:touch;tab-size:2;-moz-tab-size:2}
+body.theme-document .markdown pre code{display:block;background:none;padding:0;color:inherit;
+  font-size:inherit;white-space:pre;word-break:normal;overflow-wrap:normal;border:0}
 body.theme-document .markdown blockquote{background:var(--card);border:1px solid var(--rule);
   border-left:3px solid var(--accent);border-radius:10px;padding:14px 18px;margin:0 0 22px;color:#4a453e}
 body.theme-document .markdown img{border-radius:14px;display:block;margin:0 0 8px;
@@ -1745,7 +1844,7 @@ body.theme-chat .session-meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-fami
 body.theme-chat .session-meta b{color:var(--text);font-weight:500}
 body.theme-chat .session-meta .sep{color:var(--faint)}
 /* message rows */
-body.theme-chat .turn{display:grid;grid-template-columns:34px 1fr;gap:14px;margin:0 0 26px}
+body.theme-chat .turn{display:grid;grid-template-columns:34px minmax(0,1fr);gap:14px;margin:0 0 26px}
 body.theme-chat .turn-head{display:contents}
 body.theme-chat .avatar{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
   font-weight:700;font-family:"JetBrains Mono",monospace;font-size:13px;grid-row:1;grid-column:1}
@@ -1756,10 +1855,10 @@ body.theme-chat .who{font-family:"JetBrains Mono",monospace;font-size:12px;color
   margin-bottom:8px;display:flex;align-items:center;gap:8px;grid-row:1;grid-column:2}
 body.theme-chat .who b{color:var(--text);font-weight:500}
 body.theme-chat .who .role-label::before{content:"· "}
-body.theme-chat .turn-body{grid-row:2;grid-column:2}
+body.theme-chat .turn-body{grid-row:2;grid-column:2;min-width:0}
 /* bubble: markdown body as chat bubble */
 body.theme-chat .turn-body .markdown{background:var(--panel);border:1px solid var(--line);
-  border-radius:4px 14px 14px 14px;padding:14px 18px}
+  border-radius:4px 14px 14px 14px;padding:14px 18px;min-width:0;overflow:hidden}
 body.theme-chat .turn[data-role="user"] .turn-body .markdown{background:#17171b;border-color:rgba(255,255,255,.05)}
 body.theme-chat .markdown p{margin:0 0 12px}
 body.theme-chat .markdown p:last-child{margin-bottom:0}
@@ -1773,11 +1872,14 @@ body.theme-chat .markdown li{position:relative;padding-left:22px;margin:0 0 8px}
 body.theme-chat .markdown li::before{content:"▸";position:absolute;left:2px;color:var(--green);font-size:12px;top:2px}
 body.theme-chat .markdown strong{color:#fff;font-weight:600}
 body.theme-chat .markdown code{font-family:"JetBrains Mono",monospace;font-size:.86em;background:#000;
-  color:var(--amber);padding:.12em .4em;border-radius:4px;border:1px solid var(--line)}
+  color:var(--amber);padding:.12em .4em;border-radius:4px;border:1px solid var(--line);
+  word-break:break-word;overflow-wrap:break-word}
 body.theme-chat .markdown pre{background:#050506;border:1px solid var(--line);border-radius:12px;
-  padding:16px 18px;overflow-x:auto;font-family:"JetBrains Mono",monospace;font-size:13px;line-height:1.65;
-  margin:0 0 14px;color:#c8c8d0}
-body.theme-chat .markdown pre code{background:none;padding:0;border:0;color:inherit}
+  padding:15px 16px;overflow-x:auto;max-width:100%;font-family:"JetBrains Mono",monospace;font-size:13px;
+  line-height:1.65;margin:0 0 14px;color:#c8c8d0;
+  -webkit-overflow-scrolling:touch;tab-size:2;-moz-tab-size:2}
+body.theme-chat .markdown pre code{display:block;background:none;padding:0;border:0;color:inherit;
+  font-size:inherit;white-space:pre;word-break:normal;overflow-wrap:normal}
 body.theme-chat .markdown blockquote{background:var(--green-dim);border:1px solid rgba(0,255,136,.2);
   border-radius:10px;padding:12px 15px;margin:0 0 14px;color:#bfe9d2}
 body.theme-chat .markdown img{border-radius:12px;display:block;border:1px solid var(--line);margin:0 0 8px}
